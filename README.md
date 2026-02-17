@@ -23,18 +23,6 @@ A macOS menu bar microapp that records audio, transcribes locally with `faster-w
 
 The app is menu bar‑only (`LSUIElement = true`).
 The build includes a script phase that bundles `python/.venv` and `models/large-v3` into the `.app`. The build will fail if those folders are missing.
-
-## Python Setup (Build-Time)
-The app bundles Python and the model inside the `.app` at build time. You only need this on the developer machine to build the app.
-
-Create a local virtualenv and install dependencies:
-
-```bash
-cd /Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text
-python3 -m venv python/.venv
-python/.venv/bin/pip install -r python/requirements.txt
-```
-
 The build step copies this venv into the app bundle, so end users never need Python installed.
 
 ## Model Bundling (Medium Only)
@@ -67,15 +55,6 @@ Menu bar menu:
 - Pre-warm Model on Launch
 - Quit
 
-Optional defaults you can tune:
-```bash
-defaults write com.postsoftware.speak doubleTapInterval -float 0.35
-defaults write com.postsoftware.speak computeType -string "auto"   # int8, float16, int8_float16, auto
-defaults write com.postsoftware.speak device -string "auto"        # auto, cpu, metal
-defaults write com.postsoftware.speak useTypingFallback -bool false
-defaults write com.postsoftware.speak prewarmOnLaunch -bool true
-```
-
 ## Permissions
 - Microphone: required to record.
 - Accessibility: required to paste/insert text globally and to receive global hotkey events in some macOS configurations.
@@ -84,23 +63,3 @@ defaults write com.postsoftware.speak prewarmOnLaunch -bool true
 Uses system recording cue sounds:
 - `/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/begin_record.caf`
 - `/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/end_record.caf`
-
-## App Icon
-For distribution, add an App Icon set in Xcode (Assets.xcassets → AppIcon). Use a 1024×1024 PNG and let Xcode scale, or provide the full macOS icon set:
-
-- 16×16
-- 32×32
-- 64×64
-- 128×128
-- 256×256
-- 512×512
-- 1024×1024
-
-Xcode will generate the `@2x` variants automatically if you provide the base sizes.
-
-## Test Command (Build-Time)
-Simple transcription test using the bundled model:
-
-```bash
-python/.venv/bin/python python/transcribe.py --audio /path/to/audio.wav --model models/medium --local-only
-```
