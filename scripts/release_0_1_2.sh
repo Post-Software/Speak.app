@@ -25,6 +25,14 @@ SCHEME="${SCHEME:-STTMenuBar}"
 CONFIG="Release"
 APP_NAME="Speak"
 
+RELEASE_ENV_FILE="${RELEASE_ENV_FILE:-${ROOT_DIR}/.release.env}"
+if [ -f "${RELEASE_ENV_FILE}" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${RELEASE_ENV_FILE}"
+  set +a
+fi
+
 VERSION="${VERSION:-0.1.3}"
 BUILD_NUMBER="${BUILD_NUMBER:-3}"
 

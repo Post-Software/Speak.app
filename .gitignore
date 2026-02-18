@@ -13,3 +13,6 @@ STTMenuBar/.venv/
 build/
 dist/
 DerivedData/
+
+# Local release secrets
+.release.env
