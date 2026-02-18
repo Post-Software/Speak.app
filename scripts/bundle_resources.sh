@@ -63,8 +63,8 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
     find "${FRAMEWORK_DEST}" -type f -name "python3*-intel64" -delete || true
 
     while IFS= read -r -d '' macho; do
-      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk '{print $1}' | rg "^${OLD_FRAMEWORK_PREFIX}/" | sort -u || true)"
-      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | rg "^${OLD_FRAMEWORK_PREFIX}/" | sort -u || true)"
+      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1' | sort -u || true)"
+      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1' | sort -u || true)"
       [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
       while IFS= read -r old_id; do
@@ -109,7 +109,7 @@ PY
     unresolved="$(
       find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0 |
       while IFS= read -r -d '' macho; do
-        if otool -L "${macho}" 2>/dev/null | rg -q "${OLD_FRAMEWORK_PREFIX}"; then
+        if otool -L "${macho}" 2>/dev/null | grep -Fq "${OLD_FRAMEWORK_PREFIX}"; then
           echo "${macho}"
         fi
       done

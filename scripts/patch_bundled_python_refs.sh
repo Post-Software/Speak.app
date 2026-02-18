@@ -23,7 +23,7 @@ versions="$(
     otool -L "${file}" 2>/dev/null | tail -n +2 | awk '{print $1}'
     otool -D "${file}" 2>/dev/null | tail -n +2
   done |
-  rg "^/Library/Frameworks/Python\\.framework/Versions/" |
+  grep -E "^/Library/Frameworks/Python\\.framework/Versions/" |
   while IFS= read -r dep; do
     rest="${dep#*/Versions/}"
     echo "${rest%%/*}"
@@ -47,8 +47,8 @@ while IFS= read -r version; do
   fi
 
   while IFS= read -r macho; do
-    deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk '{print $1}' | rg "^${old_prefix}/" | sort -u || true)"
-    ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | rg "^${old_prefix}/" | sort -u || true)"
+    deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($0,p)==1' | sort -u || true)"
+    ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($0,p)==1' | sort -u || true)"
     [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
     while IFS= read -r old_id; do
