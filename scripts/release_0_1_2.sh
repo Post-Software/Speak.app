@@ -118,6 +118,8 @@ fi
 "${ROOT_DIR}/scripts/patch_bundled_python_refs.sh" "${APP_PATH}"
 "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
 
+codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
+
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
   echo "Code signature verification failed for ${APP_PATH}"
   exit 1
