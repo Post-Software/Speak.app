@@ -60,10 +60,13 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
   if [ -f "${FRAMEWORK_SRC}/Versions/${PY_VERSION}/Python" ]; then
     mkdir -p "${FRAMEWORK_DEST}"
     rsync -a --delete "${FRAMEWORK_SRC}/" "${FRAMEWORK_DEST}/"
-    find "${FRAMEWORK_DEST}" -type f -name "python3*-intel64" -delete || true
+    find "${FRAMEWORK_DEST}" \( -type f -o -type l \) -name "python3*-intel64" -delete || true
     rm -rf "${FRAMEWORK_DEST}/Versions/${PY_VERSION}/lib/python${PY_VERSION}/site-packages"
     rm -rf "${FRAMEWORK_DEST}/Versions/Current/lib/python${PY_VERSION}/site-packages"
     rm -rf "${FRAMEWORK_DEST}/lib/python${PY_VERSION}/site-packages"
+    while IFS= read -r -d '' broken_link; do
+      rm -f "${broken_link}"
+    done < <(find -L "${FRAMEWORK_DEST}" -type l -print0 2>/dev/null || true)
 
     while IFS= read -r -d '' macho; do
       deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($1,p)==1 {print $1}' | sort -u || true)"

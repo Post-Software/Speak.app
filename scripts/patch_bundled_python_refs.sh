@@ -16,8 +16,12 @@ fi
 prune_framework_site_packages() {
   local framework_root="${PY_ROOT}/Python.framework"
   [ -d "${framework_root}" ] || return 0
+  find "${framework_root}" \( -type f -o -type l \) -name "python3*-intel64" -delete || true
   find "${framework_root}/Versions" -type d -path "*/lib/python*/site-packages" -prune -exec rm -rf {} + 2>/dev/null || true
   find "${framework_root}/lib" -type d -path "*/python*/site-packages" -prune -exec rm -rf {} + 2>/dev/null || true
+  while IFS= read -r -d '' broken_link; do
+    rm -f "${broken_link}"
+  done < <(find -L "${framework_root}" -type l -print0 2>/dev/null || true)
 }
 
 collect_targets() {
@@ -43,7 +47,6 @@ if [ -z "${versions}" ]; then
   exit 0
 fi
 
-find "${PY_ROOT}/Python.framework" -type f -name "python3*-intel64" -delete || true
 prune_framework_site_packages
 
 while IFS= read -r version; do
