@@ -158,6 +158,7 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/../scripts/bundle_resources.sh",
 				"$(SRCROOT)/../python/transcribe.py",
 				"$(SRCROOT)/../python/.venv/bin/python",
 				"$(SRCROOT)/../models/medium",
@@ -170,7 +171,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nROOT=\"$(cd \"${SRCROOT}/..\" && pwd)\"\nRESOURCES=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nPY_SRC=\"${ROOT}/python/.venv\"\nPY_DEST=\"${RESOURCES}/python\"\nMODEL_SRC=\"${ROOT}/models/medium\"\nMODEL_DEST=\"${RESOURCES}/models/medium\"\nSCRIPT_SRC=\"${ROOT}/python/transcribe.py\"\n\nif [ ! -d \"${PY_SRC}\" ]; then\n  echo \"Missing venv at ${PY_SRC}. Create it with: python3 -m venv python/.venv\"\n  exit 1\nfi\n\nif [ ! -x \"${PY_SRC}/bin/python\" ]; then\n  echo \"Incomplete venv at ${PY_SRC}. Missing bin/python. Reinstall dependencies in python/.venv.\"\n  exit 1\nfi\n\nif ! find \"${PY_SRC}/lib\" -path \"*/site-packages/faster_whisper/__init__.py\" -print -quit | grep -q .; then\n  echo \"faster-whisper is missing in ${PY_SRC}. Run: python/.venv/bin/pip install -r python/requirements.txt\"\n  exit 1\nfi\n\nif [ ! -d \"${MODEL_SRC}\" ]; then\n  echo \"Missing model at ${MODEL_SRC}. Download Systran/faster-whisper-medium to models/medium\"\n  exit 1\nfi\n\nmkdir -p \"${PY_DEST}\" \"${MODEL_DEST}\"\n# -L dereferences symlinks so the bundled Python does not depend on absolute paths from the build machine.\nrsync -aL --delete \"${PY_SRC}/\" \"${PY_DEST}/\"\ncp \"${SCRIPT_SRC}\" \"${RESOURCES}/python/transcribe.py\"\nchmod +x \"${PY_DEST}/bin/python\" || true\nchmod +x \"${PY_DEST}/bin/python3\" || true\nchmod +x \"${PY_DEST}/bin/python3.12\" || true\nrsync -a --delete \"${MODEL_SRC}/\" \"${MODEL_DEST}/\"\n";
+			shellScript = "set -e\n\"${SRCROOT}/../scripts/bundle_resources.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -209,7 +210,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;
 				SWIFT_VERSION = 5.0;
@@ -230,7 +231,7 @@
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;
 				SWIFT_VERSION = 5.0;
@@ -271,7 +272,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = Speak;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -312,7 +313,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_NAME = Speak;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;

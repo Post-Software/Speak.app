@@ -14,8 +14,8 @@ set -euo pipefail
 #   NOTARY_PROFILE
 #
 # Optional env vars:
-#   VERSION (default: 0.1.2)
-#   BUILD_NUMBER (default: 2)
+#   VERSION (default: 0.1.3)
+#   BUILD_NUMBER (default: 3)
 #   SCHEME (default: STTMenuBar)
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,8 +25,8 @@ SCHEME="${SCHEME:-STTMenuBar}"
 CONFIG="Release"
 APP_NAME="Speak"
 
-VERSION="${VERSION:-0.1.2}"
-BUILD_NUMBER="${BUILD_NUMBER:-2}"
+VERSION="${VERSION:-0.1.3}"
+BUILD_NUMBER="${BUILD_NUMBER:-3}"
 
 : "${TEAM_ID:?Set TEAM_ID}"
 : "${DEVELOPER_ID_APP_CERT:?Set DEVELOPER_ID_APP_CERT}"
@@ -112,6 +112,13 @@ xcodebuild \
 APP_PATH="${EXPORT_DIR}/${APP_NAME}.app"
 if [[ ! -d "${APP_PATH}" ]]; then
   echo "Export failed: ${APP_PATH} not found"
+  exit 1
+fi
+
+"${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
+
+if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
+  echo "Code signature verification failed for ${APP_PATH}"
   exit 1
 fi
 

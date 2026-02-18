@@ -48,7 +48,7 @@ final class Settings: ObservableObject {
 
     private init() {
         let defaults = UserDefaults.standard
-        modelName = defaults.string(forKey: Keys.modelName) ?? "small"
+        modelName = defaults.string(forKey: Keys.modelName) ?? "medium"
         soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         doubleTapInterval = defaults.object(forKey: Keys.doubleTapInterval) as? TimeInterval ?? 0.35
         hotKeyTrigger = defaults.string(forKey: Keys.hotKeyTrigger) ?? "option"

@@ -1,6 +1,17 @@
 import Foundation
 
 final class TranscriptionRunner {
+    private enum RunnerError: LocalizedError {
+        case bundledRuntimeMissing
+
+        var errorDescription: String? {
+            switch self {
+            case .bundledRuntimeMissing:
+                return "Bundled transcription runtime is missing from Speak.app. Please reinstall Speak."
+            }
+        }
+    }
+
     private let settings = Settings.shared
     private let bundledModelRelativePath = "models/medium"
     private let worker = PythonWorker()
@@ -10,7 +21,7 @@ final class TranscriptionRunner {
     }
 
     func prewarm() {
-        let resolved = resolveBundledPaths()
+        guard let resolved = try? resolveBundledPaths() else { return }
         worker.prewarm(
             pythonURL: resolved.pythonURL,
             scriptURL: resolved.scriptURL,
@@ -20,7 +31,13 @@ final class TranscriptionRunner {
     }
 
     func transcribe(audioURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
-        let resolved = resolveBundledPaths()
+        let resolved: (pythonURL: URL, scriptURL: URL, modelPath: String)
+        do {
+            resolved = try resolveBundledPaths()
+        } catch {
+            completion(.failure(error))
+            return
+        }
         worker.transcribe(
             pythonURL: resolved.pythonURL,
             scriptURL: resolved.scriptURL,
@@ -31,7 +48,7 @@ final class TranscriptionRunner {
         )
     }
 
-    private func resolveBundledPaths() -> (pythonURL: URL, scriptURL: URL, modelPath: String) {
+    private func resolveBundledPaths() throws -> (pythonURL: URL, scriptURL: URL, modelPath: String) {
         if let resourcesURL = Bundle.main.resourceURL {
             let bundledPython = resourcesURL.appendingPathComponent("python/bin/python")
             let bundledScript = resourcesURL.appendingPathComponent("python/transcribe.py")
@@ -43,11 +60,15 @@ final class TranscriptionRunner {
             }
         }
 
+        #if DEBUG
         // Fallback for development runs outside a bundled app.
         let pythonURL = URL(fileURLWithPath: settings.pythonPath)
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/python/transcribe.py")
         let projectModelPath = FileManager.default.currentDirectoryPath + "/models/medium"
         let modelPath = FileManager.default.fileExists(atPath: projectModelPath) ? projectModelPath : settings.modelName
         return (pythonURL, scriptURL, modelPath)
+        #else
+        throw RunnerError.bundledRuntimeMissing
+        #endif
     }
 }
