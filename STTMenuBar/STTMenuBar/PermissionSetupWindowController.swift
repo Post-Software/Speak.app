@@ -15,7 +15,7 @@ final class PermissionSetupWindowController: NSWindowController {
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 360),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -43,15 +43,15 @@ final class PermissionSetupWindowController: NSWindowController {
         let root = NSStackView()
         root.orientation = .vertical
         root.alignment = .leading
-        root.spacing = 14
+        root.spacing = 18
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
 
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            root.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -20)
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 28),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -28),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+            root.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -24)
         ])
 
         let title = NSTextField(labelWithString: "Allow Permissions for Speak")
@@ -62,6 +62,7 @@ final class PermissionSetupWindowController: NSWindowController {
         let subtitle = NSTextField(wrappingLabelWithString: "Speak needs Microphone and Accessibility to record audio and use the global hotkey.")
         subtitle.alignment = .left
         subtitle.textColor = .secondaryLabelColor
+        subtitle.font = .systemFont(ofSize: 13)
         subtitle.maximumNumberOfLines = 0
         root.addArrangedSubview(subtitle)
 
@@ -77,7 +78,7 @@ final class PermissionSetupWindowController: NSWindowController {
             [makePermissionInfo(title: "Accessibility", detail: "Lets Speak listen for your hotkey and paste text at your cursor.", statusLabel: accessibilityStatusLabel), accessibilityButton]
         ])
         grid.columnSpacing = 14
-        grid.rowSpacing = 10
+        grid.rowSpacing = 18
         grid.xPlacement = .fill
         grid.yPlacement = .center
         grid.column(at: 0).xPlacement = .fill
@@ -88,6 +89,7 @@ final class PermissionSetupWindowController: NSWindowController {
         let footer = NSTextField(wrappingLabelWithString: "You can change these later in System Settings.")
         footer.alignment = .left
         footer.textColor = .tertiaryLabelColor
+        footer.font = .systemFont(ofSize: 12)
         footer.maximumNumberOfLines = 0
         root.addArrangedSubview(footer)
 
@@ -122,7 +124,7 @@ final class PermissionSetupWindowController: NSWindowController {
         let stack = NSStackView(views: [header, detailLabel, statusLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 4
+        stack.spacing = 6
         return stack
     }
 

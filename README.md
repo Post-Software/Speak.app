@@ -1,32 +1,51 @@
-# Speak (Local-Only)
+# Speak (macOS, Offline Speech-to-Text)
 
-A macOS menu bar microapp that records audio, transcribes locally with `faster-whisper`, and inserts the text into the focused app.
+Speak is a menu bar app for macOS that records your voice, transcribes it locally with `faster-whisper`, and inserts text into the focused app.
 
-## Features
-- Menu bar only (no Dock icon) with green idle and red recording status.
-- Global hotkey: configurable double‑tap modifier to toggle recording.
-- System sounds for mic on/off (same system sound set macOS uses for recording cues).
-- Local transcription with `faster-whisper` (offline by default).
-- Bundled `medium` model (no downloads for end users).
-- English-only transcription with a persistent model worker for faster repeat use.
-- Paste at cursor via clipboard (restores clipboard), optional typing fallback.
+## What It Does
+- Menu bar only app (`LSUIElement`, no Dock icon).
+- Green icon when idle, red icon while recording.
+- Toggle recording from:
+  - Menu item (`Start Recording` / `Stop Recording`)
+  - Global double-tap modifier hotkey (Option/Command/Control/Shift).
+- Plays native macOS record start/stop sounds.
+- Runs transcription fully offline using bundled Python + bundled model.
+- Pastes transcription into the active app and restores the previous clipboard.
 
-## Project Layout
-- `STTMenuBar/` — Swift AppKit app (menu bar, hotkey, recording, paste).
-- `python/` — Local transcription runner using `faster-whisper`.
-- `models/medium` — Bundled model folder used for offline transcription.
+## Current Runtime Defaults
+- Model: bundled `medium`
+- Language: English (`en`)
+- Device: CPU
+- Beam size: `1`
 
-## Build (Xcode)
+## Permissions
+Speak needs:
+- Microphone: to record audio.
+- Accessibility: for global hotkey handling and global paste.
+
+Speak shows an in-app permissions window on startup whenever either required permission is missing.
+
+## Repository Layout
+- `STTMenuBar/` — Xcode project + Swift AppKit app.
+- `python/transcribe.py` — Python transcription worker entrypoint.
+- `python/requirements.txt` — Python dependencies.
+- `models/medium/` — local model directory bundled into app resources at build time.
+
+## Local Build
 1. Open `STTMenuBar/STTMenuBar.xcodeproj` in Xcode.
-2. Select a Signing Team if needed.
-3. Build and Run.
+2. Select the `Speak` target and your signing team.
+3. Build/Run.
 
-The app is menu bar‑only (`LSUIElement = true`).
-The build includes a script phase that bundles `python/.venv` and `models/large-v3` into the `.app`. The build will fail if those folders are missing.
-The build step copies this venv into the app bundle, so end users never need Python installed.
+## Build-Time Python Setup (Developer Machine)
+The app bundles a local Python environment from `python/.venv` during build.
 
-## Model Bundling (Medium Only)
-Download the `medium` model into `models/medium` once on the developer machine:
+```bash
+python3 -m venv python/.venv
+python/.venv/bin/pip install -r python/requirements.txt
+```
+
+## Model Setup (Developer Machine)
+Download the medium model into `models/medium`:
 
 ```bash
 python/.venv/bin/python -m pip install -U huggingface_hub
@@ -35,31 +54,30 @@ from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id="Systran/faster-whisper-medium",
     local_dir="models/medium",
-    local_dir_use_symlinks=False
+    local_dir_use_symlinks=False,
 )
-print("Download complete.")
+print("Download complete")
 PY
 ```
 
-The Xcode build phase bundles this model inside the app, so the shipped app works fully offline with no downloads.
+## How Bundling Works
+Xcode build phase copies into app resources:
+- `python/.venv` -> `Speak.app/Contents/Resources/python`
+- `python/transcribe.py` -> `Speak.app/Contents/Resources/python/transcribe.py`
+- `models/medium` -> `Speak.app/Contents/Resources/models/medium`
 
-## Usage
-- Double‑tap Option (⌥) to start/stop recording.
-- Menu bar icon turns red while recording.
-- On stop: audio is transcribed locally and pasted into the active app.
+End users do not need to install Python or download models.
 
-Menu bar menu:
-- Start / Stop Recording
-- Hotkey
-- Toggle sounds
-- Pre-warm Model on Launch
-- Quit
+## Manual Transcription Test
+```bash
+python/.venv/bin/python python/transcribe.py \
+  --audio /path/to/audio.wav \
+  --model models/medium \
+  --language en \
+  --device cpu \
+  --local-only
+```
 
-## Permissions
-- Microphone: required to record.
-- Accessibility: required to paste/insert text globally and to receive global hotkey events in some macOS configurations.
-
-## System Sounds
-Uses system recording cue sounds:
-- `/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/begin_record.caf`
-- `/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/end_record.caf`
+## Notes
+- No analytics or telemetry are included.
+- If Accessibility is not granted, Speak can still copy text to clipboard but cannot reliably paste globally.

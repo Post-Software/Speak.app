@@ -24,10 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         configureHotKeyCallbacks()
 
-        if settings.hasSeenPermissionSetup {
+        if hasAllRequiredPermissions() {
             completeLaunchAfterSetup()
         } else {
-            settings.hasSeenPermissionSetup = true
             showPermissionSetupWindow(activate: true)
         }
     }
@@ -176,6 +175,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.prewarmOnLaunch {
             transcriptionRunner.prewarm()
         }
+    }
+
+    private func hasAllRequiredPermissions() -> Bool {
+        let micAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let accessibilityAuthorized = AccessibilityHelper.isTrusted()
+        return micAuthorized && accessibilityAuthorized
     }
 
     private func refreshHotKeyRegistration() {

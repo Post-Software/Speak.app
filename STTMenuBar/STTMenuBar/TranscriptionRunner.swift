@@ -46,7 +46,7 @@ final class TranscriptionRunner {
         // Fallback for development runs outside a bundled app.
         let pythonURL = URL(fileURLWithPath: settings.pythonPath)
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/python/transcribe.py")
-        let projectModelPath = FileManager.default.currentDirectoryPath + "/models/large-v3"
+        let projectModelPath = FileManager.default.currentDirectoryPath + "/models/medium"
         let modelPath = FileManager.default.fileExists(atPath: projectModelPath) ? projectModelPath : settings.modelName
         return (pythonURL, scriptURL, modelPath)
     }

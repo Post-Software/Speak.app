@@ -1,0 +1,15 @@
+.DS_Store
+
+# Python virtual environments
+.venv/
+python/.venv/
+STTMenuBar/.venv/
+
+# Xcode user-specific state
+**/xcuserdata/
+**/*.xcuserstate
+
+# Build artifacts
+build/
+dist/
+DerivedData/
