@@ -28,30 +28,39 @@ collect_targets() {
   find "${PY_ROOT}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \)
 }
 
-versions="$(
+otool_deps() {
+  local macho="$1"
+  otool -L "${macho}" 2>/dev/null |
+    sed -E -n 's/^[[:space:]]+(.+)[[:space:]]+\(compatibility version.*$/\1/p'
+}
+
+otool_ids() {
+  local macho="$1"
+  otool -D "${macho}" 2>/dev/null |
+    awk 'NF && $0 !~ /:$/ {sub(/^[[:space:]]+/, ""); print}'
+}
+
+framework_prefixes="$(
   collect_targets |
   while IFS= read -r file; do
-    otool -L "${file}" 2>/dev/null | tail -n +2 | awk '{print $1}'
-    otool -D "${file}" 2>/dev/null | tail -n +2
+    otool_deps "${file}"
+    otool_ids "${file}"
   done |
-  awk 'index($0, "/Library/Frameworks/Python.framework/Versions/")==1' |
-  while IFS= read -r dep; do
-    rest="${dep#*/Versions/}"
-    echo "${rest%%/*}"
-  done |
+  awk 'index($0, "/Python.framework/Versions/") > 0 && index($0, "/") == 1' |
+  sed -E 's#^(.*/Python\.framework/Versions/[^/]+)(/.*)?$#\1#' |
   sort -u
 )"
 
-if [ -z "${versions}" ]; then
+if [ -z "${framework_prefixes}" ]; then
   prune_framework_site_packages
   exit 0
 fi
 
 prune_framework_site_packages
 
-while IFS= read -r version; do
-  [ -z "${version}" ] && continue
-  old_prefix="/Library/Frameworks/Python.framework/Versions/${version}"
+while IFS= read -r old_prefix; do
+  [ -z "${old_prefix}" ] && continue
+  version="${old_prefix##*/Versions/}"
   framework_version_dest="${PY_ROOT}/Python.framework/Versions/${version}"
   if [ ! -d "${framework_version_dest}" ]; then
     echo "Missing bundled Python.framework version directory: ${framework_version_dest}"
@@ -59,8 +68,8 @@ while IFS= read -r version; do
   fi
 
   while IFS= read -r macho; do
-    deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
-    ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
+    deps="$(otool_deps "${macho}" | awk -v p="${old_prefix}/" 'index($0,p)==1 {print $0}' | sort -u || true)"
+    ids="$(otool_ids "${macho}" | awk -v p="${old_prefix}/" 'index($0,p)==1 {print $0}' | sort -u || true)"
     [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
     while IFS= read -r old_id; do
@@ -101,4 +110,4 @@ PY
       install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}" 2>/dev/null
     done <<< "${deps}"
   done < <(collect_targets)
-done <<< "${versions}"
+done <<< "${framework_prefixes}"

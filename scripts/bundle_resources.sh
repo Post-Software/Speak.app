@@ -55,7 +55,6 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
   FRAMEWORK_SRC="${PY3_REAL%%/Versions/*}"
   FRAMEWORK_DEST="${PY_DEST}/Python.framework"
   FRAMEWORK_VERSION_DEST="${FRAMEWORK_DEST}/Versions/${PY_VERSION}"
-  OLD_FRAMEWORK_PREFIX="/Library/Frameworks/Python.framework/Versions/${PY_VERSION}"
 
   if [ -f "${FRAMEWORK_SRC}/Versions/${PY_VERSION}/Python" ]; then
     mkdir -p "${FRAMEWORK_DEST}"
@@ -68,9 +67,34 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
       rm -f "${broken_link}"
     done < <(find -L "${FRAMEWORK_DEST}" -type l -print0 2>/dev/null || true)
 
+    otool_deps() {
+      local macho="$1"
+      otool -L "${macho}" 2>/dev/null |
+        sed -E -n 's/^[[:space:]]+(.+)[[:space:]]+\(compatibility version.*$/\1/p'
+    }
+
+    otool_ids() {
+      local macho="$1"
+      otool -D "${macho}" 2>/dev/null |
+        awk 'NF && $0 !~ /:$/ {sub(/^[[:space:]]+/, ""); print}'
+    }
+
+    framework_prefixes="$(
+      find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0 |
+      while IFS= read -r -d '' macho; do
+        otool_deps "${macho}"
+        otool_ids "${macho}"
+      done |
+      awk -v v="/Python.framework/Versions/${PY_VERSION}/" 'index($0, v) > 0 && index($0, "/") == 1' |
+      sed -E 's#^(.*/Python\.framework/Versions/[^/]+)(/.*)?$#\1#' |
+      sort -u
+    )"
+
+    while IFS= read -r OLD_FRAMEWORK_PREFIX; do
+      [ -z "${OLD_FRAMEWORK_PREFIX}" ] && continue
     while IFS= read -r -d '' macho; do
-      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
-      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
+      deps="$(otool_deps "${macho}" | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1 {print $0}' | sort -u || true)"
+      ids="$(otool_ids "${macho}" | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1 {print $0}' | sort -u || true)"
       [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
       while IFS= read -r old_id; do
@@ -111,11 +135,12 @@ PY
         install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}" 2>/dev/null
       done <<< "${deps}"
     done < <(find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0)
+    done <<< "${framework_prefixes}"
 
     unresolved="$(
       find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0 |
       while IFS= read -r -d '' macho; do
-        if otool -L "${macho}" 2>/dev/null | grep -Fq "${OLD_FRAMEWORK_PREFIX}"; then
+        if otool_deps "${macho}" | awk 'index($0, "/Python.framework/Versions/") > 0 && index($0, "/") == 1 { found=1 } END { exit(found?0:1) }'; then
           echo "${macho}"
         fi
       done
