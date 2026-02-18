@@ -76,7 +76,7 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
     otool_ids() {
       local macho="$1"
       otool -D "${macho}" 2>/dev/null |
-        awk 'NF && $0 !~ /:$/ {sub(/^[[:space:]]+/, ""); print}'
+        awk 'NF && $0 !~ /:$/ && $0 !~ /is not an object file/ && $0 !~ /can.t open file/ && $0 !~ /^otool:/ {sub(/^[[:space:]]+/, ""); print}'
     }
 
     framework_prefixes="$(
