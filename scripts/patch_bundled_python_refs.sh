@@ -47,8 +47,8 @@ while IFS= read -r version; do
   fi
 
   while IFS= read -r macho; do
-    deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($0,p)==1' | sort -u || true)"
-    ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($0,p)==1' | sort -u || true)"
+    deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
+    ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${old_prefix}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
     [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
     while IFS= read -r old_id; do

@@ -63,8 +63,8 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
     find "${FRAMEWORK_DEST}" -type f -name "python3*-intel64" -delete || true
 
     while IFS= read -r -d '' macho; do
-      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1' | sort -u || true)"
-      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($0,p)==1' | sort -u || true)"
+      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
+      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | awk -v p="${OLD_FRAMEWORK_PREFIX}/" 'index($1,p)==1 {print $1}' | sort -u || true)"
       [ -z "${deps}" ] && [ -z "${ids}" ] && continue
 
       while IFS= read -r old_id; do
