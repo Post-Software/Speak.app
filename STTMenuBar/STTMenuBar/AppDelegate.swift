@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isTranscribing = false
     private var currentRecordingURL: URL?
     private var recordingStartedAt: Date?
+    private var setupWindowController: PermissionSetupWindowController?
 
     private var toggleItem: NSMenuItem?
     private var soundsItem: NSMenuItem?
@@ -21,10 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
-        configureHotKey()
-        requestMicrophonePermissionOnStartup()
-        if settings.prewarmOnLaunch {
-            transcriptionRunner.prewarm()
+        configureHotKeyCallbacks()
+
+        if settings.hasSeenPermissionSetup {
+            completeLaunchAfterSetup()
+        } else {
+            settings.hasSeenPermissionSetup = true
+            showPermissionSetupWindow(activate: true)
         }
     }
 
@@ -47,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggle.target = self
         toggleItem = toggle
         menu.addItem(toggle)
+
+        let setup = NSMenuItem(title: "Permissions Setup...", action: #selector(openPermissionSetup), keyEquivalent: "")
+        setup.target = self
+        menu.addItem(setup)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -82,31 +90,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    private func configureHotKey() {
-        AccessibilityHelper.requestIfNeeded()
+    private func configureHotKeyCallbacks() {
         hotKeyMonitor.onDoubleTap = { [weak self] in
             self?.toggleRecording()
         }
-        hotKeyMonitor.onStartFailure = { [weak self] in
-            let alert = NSAlert()
-            alert.messageText = "Hotkey Disabled"
-            alert.informativeText = "Speak could not register the global hotkey because macOS blocked accessibility access. Open System Settings → Privacy & Security → Accessibility, enable Speak, and then relaunch the app."
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
-            self?.updateToggleTitle()
-        }
-        hotKeyMonitor.start()
+        hotKeyMonitor.onStartFailure = { [weak self] in self?.showHotkeyPermissionAlert() }
     }
 
-    private func requestMicrophonePermissionOnStartup() {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        guard status == .notDetermined else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.audioRecorder.requestMicrophoneAccess { granted in
-                if !granted {
-                    self?.showMicrophonePermissionAlert()
-                }
-            }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if setupWindowController?.window?.isVisible == true {
+            setupWindowController?.refreshStatuses()
         }
     }
 
@@ -124,10 +117,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .authorized:
             break
         case .notDetermined:
+            NSApp.activate(ignoringOtherApps: true)
             audioRecorder.requestMicrophoneAccess { [weak self] granted in
+                let currentStatus = AVCaptureDevice.authorizationStatus(for: .audio)
                 if granted {
                     self?.startRecording()
-                } else {
+                } else if currentStatus == .denied || currentStatus == .restricted {
                     self?.showMicrophonePermissionAlert()
                 }
             }
@@ -165,6 +160,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if response == .alertFirstButtonReturn,
            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func showHotkeyPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Hotkey Disabled"
+        alert.informativeText = "Speak could not register the global hotkey because accessibility access is blocked. Open Permissions Setup from the menu bar to grant Accessibility access."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func completeLaunchAfterSetup() {
+        refreshHotKeyRegistration()
+        if settings.prewarmOnLaunch {
+            transcriptionRunner.prewarm()
+        }
+    }
+
+    private func refreshHotKeyRegistration() {
+        hotKeyMonitor.stop()
+        guard AccessibilityHelper.isTrusted() else { return }
+        hotKeyMonitor.start()
+    }
+
+    private func showPermissionSetupWindow(activate: Bool) {
+        if setupWindowController == nil {
+            let controller = PermissionSetupWindowController()
+            controller.onRequestMicrophone = { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                self?.audioRecorder.requestMicrophoneAccess { _ in
+                    self?.setupWindowController?.refreshStatuses()
+                }
+            }
+            controller.onRequestAccessibility = { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                _ = AccessibilityHelper.requestIfNeeded()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    self?.setupWindowController?.refreshStatuses()
+                    self?.refreshHotKeyRegistration()
+                }
+            }
+            controller.onContinue = { [weak self] in
+                self?.completeLaunchAfterSetup()
+            }
+            setupWindowController = controller
+        }
+
+        setupWindowController?.refreshStatuses()
+        setupWindowController?.showWindow(nil)
+        if activate {
+            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
@@ -255,6 +301,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.prewarmOnLaunch {
             transcriptionRunner.prewarm()
         }
+    }
+
+    @objc private func openPermissionSetup() {
+        showPermissionSetupWindow(activate: true)
     }
 
     @objc private func quitApp() {

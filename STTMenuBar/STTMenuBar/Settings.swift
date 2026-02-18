@@ -14,6 +14,7 @@ final class Settings: ObservableObject {
         static let pythonPath = "pythonPath"
         static let useTypingFallback = "useTypingFallback"
         static let prewarmOnLaunch = "prewarmOnLaunch"
+        static let hasSeenPermissionSetup = "hasSeenPermissionSetup"
     }
 
     @Published var modelName: String {
@@ -56,6 +57,10 @@ final class Settings: ObservableObject {
         didSet { UserDefaults.standard.set(prewarmOnLaunch, forKey: Keys.prewarmOnLaunch) }
     }
 
+    @Published var hasSeenPermissionSetup: Bool {
+        didSet { UserDefaults.standard.set(hasSeenPermissionSetup, forKey: Keys.hasSeenPermissionSetup) }
+    }
+
     private init() {
         let defaults = UserDefaults.standard
         modelName = defaults.string(forKey: Keys.modelName) ?? "small"
@@ -68,5 +73,6 @@ final class Settings: ObservableObject {
         pythonPath = defaults.string(forKey: Keys.pythonPath) ?? "python/.venv/bin/python"
         useTypingFallback = defaults.object(forKey: Keys.useTypingFallback) as? Bool ?? false
         prewarmOnLaunch = defaults.object(forKey: Keys.prewarmOnLaunch) as? Bool ?? false
+        hasSeenPermissionSetup = defaults.object(forKey: Keys.hasSeenPermissionSetup) as? Bool ?? false
     }
 }
