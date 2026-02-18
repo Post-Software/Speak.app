@@ -13,6 +13,13 @@ if [ ! -d "${PY_ROOT}" ]; then
   exit 1
 fi
 
+prune_framework_site_packages() {
+  local framework_root="${PY_ROOT}/Python.framework"
+  [ -d "${framework_root}" ] || return 0
+  find "${framework_root}/Versions" -type d -path "*/lib/python*/site-packages" -prune -exec rm -rf {} + 2>/dev/null || true
+  find "${framework_root}/lib" -type d -path "*/python*/site-packages" -prune -exec rm -rf {} + 2>/dev/null || true
+}
+
 collect_targets() {
   find "${PY_ROOT}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \)
 }
@@ -23,7 +30,7 @@ versions="$(
     otool -L "${file}" 2>/dev/null | tail -n +2 | awk '{print $1}'
     otool -D "${file}" 2>/dev/null | tail -n +2
   done |
-  grep -E "^/Library/Frameworks/Python\\.framework/Versions/" |
+  awk 'index($0, "/Library/Frameworks/Python.framework/Versions/")==1' |
   while IFS= read -r dep; do
     rest="${dep#*/Versions/}"
     echo "${rest%%/*}"
@@ -32,10 +39,12 @@ versions="$(
 )"
 
 if [ -z "${versions}" ]; then
+  prune_framework_site_packages
   exit 0
 fi
 
 find "${PY_ROOT}/Python.framework" -type f -name "python3*-intel64" -delete || true
+prune_framework_site_packages
 
 while IFS= read -r version; do
   [ -z "${version}" ] && continue
