@@ -5,8 +5,6 @@ ROOT="$(cd "${SRCROOT}/.." && pwd)"
 RESOURCES="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
 PY_SRC="${ROOT}/python/.venv"
 PY_DEST="${RESOURCES}/python"
-MODEL_SRC="${ROOT}/models/medium"
-MODEL_DEST="${RESOURCES}/models/medium"
 SCRIPT_SRC="${ROOT}/python/transcribe.py"
 
 if [ ! -d "${PY_SRC}" ]; then
@@ -24,19 +22,18 @@ if ! find "${PY_SRC}/lib" -path "*/site-packages/faster_whisper/__init__.py" -pr
   exit 1
 fi
 
-if [ ! -d "${MODEL_SRC}" ]; then
-  echo "Missing model at ${MODEL_SRC}. Download Systran/faster-whisper-medium to models/medium"
+if ! find "${PY_SRC}/lib" -path "*/site-packages/huggingface_hub/__init__.py" -print -quit | grep -q .; then
+  echo "huggingface_hub is missing in ${PY_SRC}. Run: python/.venv/bin/pip install -r python/requirements.txt"
   exit 1
 fi
 
-mkdir -p "${PY_DEST}" "${MODEL_DEST}"
-# -L dereferences symlinks so the bundled Python does not depend on absolute paths from the build machine.
+mkdir -p "${PY_DEST}"
+# -L dereferences symlinks so bundled Python does not depend on build-machine paths.
 rsync -aL --delete "${PY_SRC}/" "${PY_DEST}/"
 cp "${SCRIPT_SRC}" "${RESOURCES}/python/transcribe.py"
 for pybin in "${PY_DEST}/bin/python" "${PY_DEST}/bin/python3" "${PY_DEST}"/bin/python3.*; do
   [ -f "${pybin}" ] && chmod +x "${pybin}" || true
 done
-rsync -a --delete "${MODEL_SRC}/" "${MODEL_DEST}/"
 
 # If the venv comes from python.org's framework build, the interpreter links to
 # /Library/Frameworks/Python.framework. Bundle that framework and rewrite the

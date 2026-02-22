@@ -2,9 +2,28 @@
 import argparse
 import json
 import os
+import shutil
 import sys
+import uuid
 
 from faster_whisper import WhisperModel
+from huggingface_hub import HfApi, snapshot_download
+
+
+MODEL_SPECS = {
+    "whisper_small_en": {
+        "repo": "Systran/faster-whisper-small.en",
+        "display_name": "Small (Fastest)",
+    },
+    "whisper_medium_en": {
+        "repo": "Systran/faster-whisper-medium.en",
+        "display_name": "Medium (Recommended)",
+    },
+    "whisper_large_v3": {
+        "repo": "Systran/faster-whisper-large-v3",
+        "display_name": "Large v3 (Best Accuracy)",
+    },
+}
 
 
 def parse_args():
@@ -18,6 +37,13 @@ def parse_args():
     p.add_argument("--allow-download", action="store_true", help="Allow model download if missing")
     p.add_argument("--beam-size", default=1, type=int, help="Beam size for decoding")
     p.add_argument("--worker", action="store_true", help="Run in persistent worker mode")
+
+    p.add_argument("--model-info", action="store_true", help="Print model metadata JSON")
+    p.add_argument("--download-model", action="store_true", help="Download a model into destination directory")
+    p.add_argument("--delete-model", action="store_true", help="Delete a model directory under destination")
+    p.add_argument("--model-id", required=False, help="Managed model identifier")
+    p.add_argument("--dest", required=False, help="Destination root path for managed model operations")
+
     return p.parse_args()
 
 
@@ -65,8 +91,114 @@ def worker_loop(model, language, beam_size):
         sys.stdout.flush()
 
 
+def require_model_spec(model_id):
+    spec = MODEL_SPECS.get(model_id)
+    if not spec:
+        raise ValueError(f"Unknown model id: {model_id}")
+    return spec
+
+
+def compute_repo_size(repo_id):
+    api = HfApi()
+    info = api.model_info(repo_id=repo_id, files_metadata=True)
+
+    total = 0
+    for sibling in info.siblings or []:
+        size = getattr(sibling, "size", None)
+        if isinstance(size, int):
+            total += size
+
+    if total > 0:
+        return total
+
+    for entry in api.list_repo_tree(repo_id=repo_id, recursive=True, expand=True):
+        if getattr(entry, "type", None) != "file":
+            continue
+        size = getattr(entry, "size", None)
+        if isinstance(size, int):
+            total += size
+
+    return total
+
+
+def handle_model_info(args):
+    if not args.model_id:
+        raise ValueError("--model-id is required for --model-info")
+
+    spec = require_model_spec(args.model_id)
+    total_bytes = compute_repo_size(spec["repo"])
+
+    payload = {
+        "id": args.model_id,
+        "repo": spec["repo"],
+        "display_name": spec["display_name"],
+        "download_bytes": int(total_bytes),
+    }
+    print(json.dumps(payload))
+    return 0
+
+
+def handle_download_model(args):
+    if not args.model_id:
+        raise ValueError("--model-id is required for --download-model")
+    if not args.dest:
+        raise ValueError("--dest is required for --download-model")
+
+    spec = require_model_spec(args.model_id)
+
+    os.makedirs(args.dest, exist_ok=True)
+    target_dir = os.path.join(args.dest, args.model_id)
+    staging_dir = os.path.join(args.dest, f".staging-{args.model_id}-{uuid.uuid4().hex}")
+
+    if os.path.isdir(staging_dir):
+        shutil.rmtree(staging_dir)
+
+    try:
+        snapshot_download(
+            repo_id=spec["repo"],
+            local_dir=staging_dir,
+            local_dir_use_symlinks=False,
+        )
+
+        if os.path.isdir(target_dir):
+            shutil.rmtree(target_dir)
+        os.rename(staging_dir, target_dir)
+    except Exception:
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
+
+    print(json.dumps({"ok": True, "path": target_dir}))
+    return 0
+
+
+def handle_delete_model(args):
+    if not args.model_id:
+        raise ValueError("--model-id is required for --delete-model")
+    if not args.dest:
+        raise ValueError("--dest is required for --delete-model")
+
+    target_dir = os.path.join(args.dest, args.model_id)
+    if os.path.isdir(target_dir):
+        shutil.rmtree(target_dir)
+
+    print(json.dumps({"ok": True, "path": target_dir}))
+    return 0
+
+
 def main():
     args = parse_args()
+
+    try:
+        if args.model_info:
+            return handle_model_info(args)
+        if args.download_model:
+            return handle_download_model(args)
+        if args.delete_model:
+            return handle_delete_model(args)
+    except Exception as e:
+        print(str(e), file=sys.stderr)
+        return 4
 
     if not args.worker:
         if not args.audio or not os.path.exists(args.audio):

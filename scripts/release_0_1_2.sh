@@ -78,6 +78,13 @@ if ! find "${ROOT_DIR}/python/.venv/lib" -path "*/site-packages/faster_whisper/_
   exit 1
 fi
 
+if ! find "${ROOT_DIR}/python/.venv/lib" -path "*/site-packages/huggingface_hub/__init__.py" -print -quit | grep -q .; then
+  echo "huggingface_hub is missing from python/.venv."
+  echo "Install dependencies with:"
+  echo "  python/.venv/bin/pip install -r python/requirements.txt"
+  exit 1
+fi
+
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PLIST_PATH}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${PLIST_PATH}"
 
@@ -116,6 +123,7 @@ if [[ ! -d "${APP_PATH}" ]]; then
 fi
 
 "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
+echo "Model weights are not bundled. End users download a model on first launch."
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
   echo "Code signature verification failed for ${APP_PATH}"

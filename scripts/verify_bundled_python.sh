@@ -60,4 +60,10 @@ if [ -n "${abs_local_refs}" ]; then
   exit 1
 fi
 
+if [ -d "${APP_PATH}/Contents/Resources/models" ]; then
+  echo "Model weights should not be bundled in app resources. Found: ${APP_PATH}/Contents/Resources/models"
+  exit 1
+fi
+
 echo "Bundled Python verification passed for: ${APP_PATH}"
+echo "Verified no bundled model weights in app resources."

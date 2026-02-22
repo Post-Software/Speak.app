@@ -3,33 +3,44 @@
 Speak is a menu bar app for macOS that records your voice, transcribes it locally with `faster-whisper`, and inserts text into the focused app.
 
 ## What It Does
-- Menu bar only app (`LSUIElement`, no Dock icon).
+- Menu bar app (`LSUIElement`, no Dock icon).
 - Green icon when idle, red icon while recording.
 - Toggle recording from:
   - Menu item (`Start Recording` / `Stop Recording`)
   - Global double-tap modifier hotkey (Option/Command/Control/Shift).
 - Plays native macOS record start/stop sounds.
-- Runs transcription fully offline using bundled Python + bundled model.
+- Runs transcription fully offline after first-run setup.
 - Pastes transcription into the active app and restores the previous clipboard.
 
-## Current Runtime Defaults
-- Model: bundled `medium`
-- Language: English (`en`)
-- Device: CPU
-- Beam size: `1`
+## First-Run Setup
+On first launch, Speak opens a setup wizard and blocks recording until setup is complete.
 
-## Permissions
-Speak needs:
-- Microphone: to record audio.
-- Accessibility: for global hotkey handling and global paste.
+Step 1: Permissions
+- Microphone (required)
+- Accessibility (required for hotkey + auto-paste)
 
-Speak shows an in-app permissions window on startup whenever either required permission is missing.
+Step 2: Model download
+- `Small (Fastest)` → `Systran/faster-whisper-small.en`
+- `Medium (Recommended)` → `Systran/faster-whisper-medium.en`
+- `Large v3 (Best Accuracy)` → `Systran/faster-whisper-large-v3`
+
+Speak fetches exact download size at runtime before consent.
+
+## Model Storage and Switching
+- Models are stored in:
+  - `~/Library/Application Support/Speak/models/<model_id>/`
+- Manifest is stored at:
+  - `~/Library/Application Support/Speak/models/manifest.json`
+- Only one model is kept at a time.
+- When switching models, Speak keeps the old model active until the new model is fully downloaded and verified, then deletes the old model.
+
+## Offline First Launch Behavior
+If no internet is available during first-run setup, model setup remains blocked and recording stays disabled until download succeeds.
 
 ## Repository Layout
 - `STTMenuBar/` — Xcode project + Swift AppKit app.
-- `python/transcribe.py` — Python transcription worker entrypoint.
+- `python/transcribe.py` — Python transcription worker + model management commands.
 - `python/requirements.txt` — Python dependencies.
-- `models/medium/` — local model directory bundled into app resources at build time.
 
 ## Local Build
 1. Open `STTMenuBar/STTMenuBar.xcodeproj` in Xcode.
@@ -44,40 +55,14 @@ python3 -m venv python/.venv
 python/.venv/bin/pip install -r python/requirements.txt
 ```
 
-## Model Setup (Developer Machine)
-Download the medium model into `models/medium`:
-
-```bash
-python/.venv/bin/python -m pip install -U huggingface_hub
-python/.venv/bin/python - <<'PY'
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id="Systran/faster-whisper-medium",
-    local_dir="models/medium",
-    local_dir_use_symlinks=False,
-)
-print("Download complete")
-PY
-```
-
 ## How Bundling Works
 Xcode build phase copies into app resources:
 - `python/.venv` -> `Speak.app/Contents/Resources/python`
 - `python/transcribe.py` -> `Speak.app/Contents/Resources/python/transcribe.py`
-- `models/medium` -> `Speak.app/Contents/Resources/models/medium`
 
-End users do not need to install Python or download models.
-
-## Manual Transcription Test
-```bash
-python/.venv/bin/python python/transcribe.py \
-  --audio /path/to/audio.wav \
-  --model models/medium \
-  --language en \
-  --device cpu \
-  --local-only
-```
+Model weights are not bundled in the app; they are downloaded during setup.
 
 ## Notes
 - No analytics or telemetry are included.
+- Transcription default language is English.
 - If Accessibility is not granted, Speak can still copy text to clipboard but cannot reliably paste globally.

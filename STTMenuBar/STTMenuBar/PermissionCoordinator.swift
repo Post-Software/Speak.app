@@ -15,6 +15,7 @@ enum PermissionCoordinatorError: LocalizedError {
 
 final class PermissionCoordinator {
     private let microphoneSettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+    private let accessibilitySettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
 
     func hasAllRequiredPermissions() -> Bool {
         microphoneStatus == .authorized && AccessibilityHelper.isTrusted()
@@ -29,19 +30,18 @@ final class PermissionCoordinator {
     }
 
     func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
-        let status = microphoneStatus
-        switch status {
+        let currentStatus = microphoneStatus
+
+        switch currentStatus {
         case .authorized:
             completion(true)
         case .notDetermined:
             NSApp.activate(ignoringOtherApps: true)
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                DispatchQueue.main.async {
-                    if granted {
-                        completion(true)
-                        return
+            DispatchQueue.main.async {
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    DispatchQueue.main.async {
+                        completion(granted)
                     }
-                    self.pollMicrophoneStatusUntilResolved(timeout: 3.0, completion: completion)
                 }
             }
         case .denied, .restricted:
@@ -61,29 +61,8 @@ final class PermissionCoordinator {
         NSWorkspace.shared.open(microphoneSettingsURL)
     }
 
-    private func pollMicrophoneStatusUntilResolved(timeout: TimeInterval, completion: @escaping (Bool) -> Void) {
-        let deadline = Date().addingTimeInterval(timeout)
-
-        func check() {
-            let current = AVCaptureDevice.authorizationStatus(for: .audio)
-            switch current {
-            case .authorized:
-                completion(true)
-            case .denied, .restricted:
-                completion(false)
-            case .notDetermined:
-                if Date() >= deadline {
-                    completion(false)
-                } else {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        check()
-                    }
-                }
-            @unknown default:
-                completion(false)
-            }
-        }
-
-        check()
+    func openAccessibilitySettings() {
+        guard let accessibilitySettingsURL else { return }
+        NSWorkspace.shared.open(accessibilitySettingsURL)
     }
 }

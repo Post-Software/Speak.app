@@ -12,6 +12,11 @@ final class Settings: ObservableObject {
         static let pythonPath = "pythonPath"
         static let useTypingFallback = "useTypingFallback"
         static let prewarmOnLaunch = "prewarmOnLaunch"
+
+        static let activeModelID = "activeModelID"
+        static let modelSetupCompleted = "modelSetupCompleted"
+        static let installedModels = "installedModels"
+        static let lastKnownModelSizes = "lastKnownModelSizes"
     }
 
     @Published var modelName: String {
@@ -46,6 +51,22 @@ final class Settings: ObservableObject {
         didSet { UserDefaults.standard.set(prewarmOnLaunch, forKey: Keys.prewarmOnLaunch) }
     }
 
+    @Published var activeModelID: String {
+        didSet { UserDefaults.standard.set(activeModelID, forKey: Keys.activeModelID) }
+    }
+
+    @Published var modelSetupCompleted: Bool {
+        didSet { UserDefaults.standard.set(modelSetupCompleted, forKey: Keys.modelSetupCompleted) }
+    }
+
+    @Published var installedModelsJSON: String {
+        didSet { UserDefaults.standard.set(installedModelsJSON, forKey: Keys.installedModels) }
+    }
+
+    @Published var lastKnownModelSizesJSON: String {
+        didSet { UserDefaults.standard.set(lastKnownModelSizesJSON, forKey: Keys.lastKnownModelSizes) }
+    }
+
     private init() {
         let defaults = UserDefaults.standard
         modelName = defaults.string(forKey: Keys.modelName) ?? "medium"
@@ -56,5 +77,10 @@ final class Settings: ObservableObject {
         pythonPath = defaults.string(forKey: Keys.pythonPath) ?? "python/.venv/bin/python"
         useTypingFallback = defaults.object(forKey: Keys.useTypingFallback) as? Bool ?? false
         prewarmOnLaunch = defaults.object(forKey: Keys.prewarmOnLaunch) as? Bool ?? false
+
+        activeModelID = defaults.string(forKey: Keys.activeModelID) ?? ""
+        modelSetupCompleted = defaults.object(forKey: Keys.modelSetupCompleted) as? Bool ?? false
+        installedModelsJSON = defaults.string(forKey: Keys.installedModels) ?? "[]"
+        lastKnownModelSizesJSON = defaults.string(forKey: Keys.lastKnownModelSizes) ?? "{}"
     }
 }

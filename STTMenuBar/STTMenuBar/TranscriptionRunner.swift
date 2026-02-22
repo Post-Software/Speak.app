@@ -1,19 +1,22 @@
 import Foundation
 
 final class TranscriptionRunner {
-    private enum RunnerError: LocalizedError {
+    enum RunnerError: LocalizedError {
         case bundledRuntimeMissing
+        case modelSetupRequired
 
         var errorDescription: String? {
             switch self {
             case .bundledRuntimeMissing:
                 return "Bundled transcription runtime is missing from Speak.app. Please reinstall Speak."
+            case .modelSetupRequired:
+                return "No model is installed yet. Complete setup before recording."
             }
         }
     }
 
     private let settings = Settings.shared
-    private let bundledModelRelativePath = "models/medium"
+    private let modelManager = ModelManager.shared
     private let worker = PythonWorker()
 
     func cancel() {
@@ -21,54 +24,60 @@ final class TranscriptionRunner {
     }
 
     func prewarm() {
-        guard let resolved = try? resolveBundledPaths() else { return }
+        guard let modelPath = modelManager.activeModelLocalPath else { return }
+        guard let runtime = try? resolveRuntimePaths() else { return }
+
         worker.prewarm(
-            pythonURL: resolved.pythonURL,
-            scriptURL: resolved.scriptURL,
-            modelPath: resolved.modelPath,
+            pythonURL: runtime.pythonURL,
+            scriptURL: runtime.scriptURL,
+            modelPath: modelPath,
             computeType: settings.computeType
         )
     }
 
     func transcribe(audioURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
-        let resolved: (pythonURL: URL, scriptURL: URL, modelPath: String)
+        guard let modelPath = modelManager.activeModelLocalPath else {
+            completion(.failure(RunnerError.modelSetupRequired))
+            return
+        }
+
+        let runtime: (pythonURL: URL, scriptURL: URL)
         do {
-            resolved = try resolveBundledPaths()
+            runtime = try resolveRuntimePaths()
         } catch {
             completion(.failure(error))
             return
         }
+
         worker.transcribe(
-            pythonURL: resolved.pythonURL,
-            scriptURL: resolved.scriptURL,
-            modelPath: resolved.modelPath,
+            pythonURL: runtime.pythonURL,
+            scriptURL: runtime.scriptURL,
+            modelPath: modelPath,
             audioPath: audioURL.path,
             computeType: settings.computeType,
             completion: completion
         )
     }
 
-    private func resolveBundledPaths() throws -> (pythonURL: URL, scriptURL: URL, modelPath: String) {
+    private func resolveRuntimePaths() throws -> (pythonURL: URL, scriptURL: URL) {
         if let resourcesURL = Bundle.main.resourceURL {
             let bundledPython = resourcesURL.appendingPathComponent("python/bin/python")
             let bundledScript = resourcesURL.appendingPathComponent("python/transcribe.py")
-            let bundledModel = resourcesURL.appendingPathComponent(bundledModelRelativePath)
             if FileManager.default.fileExists(atPath: bundledPython.path),
-               FileManager.default.fileExists(atPath: bundledScript.path),
-               FileManager.default.fileExists(atPath: bundledModel.path) {
-                return (bundledPython, bundledScript, bundledModel.path)
+               FileManager.default.fileExists(atPath: bundledScript.path) {
+                return (bundledPython, bundledScript)
             }
         }
 
         #if DEBUG
-        // Fallback for development runs outside a bundled app.
         let pythonURL = URL(fileURLWithPath: settings.pythonPath)
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/python/transcribe.py")
-        let projectModelPath = FileManager.default.currentDirectoryPath + "/models/medium"
-        let modelPath = FileManager.default.fileExists(atPath: projectModelPath) ? projectModelPath : settings.modelName
-        return (pythonURL, scriptURL, modelPath)
-        #else
-        throw RunnerError.bundledRuntimeMissing
+        if FileManager.default.fileExists(atPath: pythonURL.path),
+           FileManager.default.fileExists(atPath: scriptURL.path) {
+            return (pythonURL, scriptURL)
+        }
         #endif
+
+        throw RunnerError.bundledRuntimeMissing
     }
 }
