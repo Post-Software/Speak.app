@@ -12,6 +12,13 @@ final class Settings: ObservableObject {
         static let pythonPath = "pythonPath"
         static let useTypingFallback = "useTypingFallback"
         static let prewarmOnLaunch = "prewarmOnLaunch"
+
+        static let activeModelID = "activeModelID"
+        static let modelSetupCompleted = "modelSetupCompleted"
+        static let installedModels = "installedModels"
+        static let lastKnownModelSizes = "lastKnownModelSizes"
+        static let lastBackend = "lastBackend"
+        static let lastFallbackReason = "lastFallbackReason"
     }
 
     @Published var modelName: String {
@@ -46,6 +53,30 @@ final class Settings: ObservableObject {
         didSet { UserDefaults.standard.set(prewarmOnLaunch, forKey: Keys.prewarmOnLaunch) }
     }
 
+    @Published var activeModelID: String {
+        didSet { UserDefaults.standard.set(activeModelID, forKey: Keys.activeModelID) }
+    }
+
+    @Published var modelSetupCompleted: Bool {
+        didSet { UserDefaults.standard.set(modelSetupCompleted, forKey: Keys.modelSetupCompleted) }
+    }
+
+    @Published var installedModelsJSON: String {
+        didSet { UserDefaults.standard.set(installedModelsJSON, forKey: Keys.installedModels) }
+    }
+
+    @Published var lastKnownModelSizesJSON: String {
+        didSet { UserDefaults.standard.set(lastKnownModelSizesJSON, forKey: Keys.lastKnownModelSizes) }
+    }
+
+    @Published var lastBackend: String {
+        didSet { UserDefaults.standard.set(lastBackend, forKey: Keys.lastBackend) }
+    }
+
+    @Published var lastFallbackReason: String {
+        didSet { UserDefaults.standard.set(lastFallbackReason, forKey: Keys.lastFallbackReason) }
+    }
+
     private init() {
         let defaults = UserDefaults.standard
         modelName = defaults.string(forKey: Keys.modelName) ?? "medium"
@@ -56,5 +87,12 @@ final class Settings: ObservableObject {
         pythonPath = defaults.string(forKey: Keys.pythonPath) ?? "python/.venv/bin/python"
         useTypingFallback = defaults.object(forKey: Keys.useTypingFallback) as? Bool ?? false
         prewarmOnLaunch = defaults.object(forKey: Keys.prewarmOnLaunch) as? Bool ?? false
+
+        activeModelID = defaults.string(forKey: Keys.activeModelID) ?? ""
+        modelSetupCompleted = defaults.object(forKey: Keys.modelSetupCompleted) as? Bool ?? false
+        installedModelsJSON = defaults.string(forKey: Keys.installedModels) ?? "[]"
+        lastKnownModelSizesJSON = defaults.string(forKey: Keys.lastKnownModelSizes) ?? "{}"
+        lastBackend = defaults.string(forKey: Keys.lastBackend) ?? ""
+        lastFallbackReason = defaults.string(forKey: Keys.lastFallbackReason) ?? ""
     }
 }

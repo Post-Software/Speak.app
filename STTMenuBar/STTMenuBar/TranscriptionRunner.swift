@@ -1,74 +1,50 @@
 import Foundation
 
 final class TranscriptionRunner {
-    private enum RunnerError: LocalizedError {
-        case bundledRuntimeMissing
+    enum RunnerError: LocalizedError {
+        case modelSetupRequired
 
         var errorDescription: String? {
             switch self {
-            case .bundledRuntimeMissing:
-                return "Bundled transcription runtime is missing from Speak.app. Please reinstall Speak."
+            case .modelSetupRequired:
+                return "No model is configured yet. Open Model setup and download a model first."
             }
         }
     }
 
-    private let settings = Settings.shared
-    private let bundledModelRelativePath = "models/medium"
-    private let worker = PythonWorker()
+    private let modelManager = ModelManager.shared
+    private let worker = TranscriberProcess()
+
+    var onWorkerReady: ((TranscriberProcess.WorkerReady) -> Void)? {
+        didSet {
+            worker.onWorkerReady = onWorkerReady
+        }
+    }
 
     func cancel() {
         worker.stop()
     }
 
     func prewarm() {
-        guard let resolved = try? resolveBundledPaths() else { return }
-        worker.prewarm(
-            pythonURL: resolved.pythonURL,
-            scriptURL: resolved.scriptURL,
-            modelPath: resolved.modelPath,
-            computeType: settings.computeType
-        )
+        guard let active = modelManager.activeModel else { return }
+        _ = try? worker.ensureWorker(modelID: active.id, modelsRoot: modelManager.modelsRootURL)
     }
 
     func transcribe(audioURL: URL, completion: @escaping (Result<String, Error>) -> Void) {
-        let resolved: (pythonURL: URL, scriptURL: URL, modelPath: String)
+        guard let active = modelManager.activeModel,
+              modelManager.isInstalled(modelID: active.id) else {
+            completion(.failure(RunnerError.modelSetupRequired))
+            return
+        }
+
         do {
-            resolved = try resolveBundledPaths()
+            let ready = try worker.ensureWorker(modelID: active.id, modelsRoot: modelManager.modelsRootURL)
+            modelManager.updateBackendState(backend: ready.backend, fallbackReason: ready.fallbackReason)
         } catch {
             completion(.failure(error))
             return
         }
-        worker.transcribe(
-            pythonURL: resolved.pythonURL,
-            scriptURL: resolved.scriptURL,
-            modelPath: resolved.modelPath,
-            audioPath: audioURL.path,
-            computeType: settings.computeType,
-            completion: completion
-        )
-    }
 
-    private func resolveBundledPaths() throws -> (pythonURL: URL, scriptURL: URL, modelPath: String) {
-        if let resourcesURL = Bundle.main.resourceURL {
-            let bundledPython = resourcesURL.appendingPathComponent("python/bin/python")
-            let bundledScript = resourcesURL.appendingPathComponent("python/transcribe.py")
-            let bundledModel = resourcesURL.appendingPathComponent(bundledModelRelativePath)
-            if FileManager.default.fileExists(atPath: bundledPython.path),
-               FileManager.default.fileExists(atPath: bundledScript.path),
-               FileManager.default.fileExists(atPath: bundledModel.path) {
-                return (bundledPython, bundledScript, bundledModel.path)
-            }
-        }
-
-        #if DEBUG
-        // Fallback for development runs outside a bundled app.
-        let pythonURL = URL(fileURLWithPath: settings.pythonPath)
-        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/python/transcribe.py")
-        let projectModelPath = FileManager.default.currentDirectoryPath + "/models/medium"
-        let modelPath = FileManager.default.fileExists(atPath: projectModelPath) ? projectModelPath : settings.modelName
-        return (pythonURL, scriptURL, modelPath)
-        #else
-        throw RunnerError.bundledRuntimeMissing
-        #endif
+        worker.transcribe(audioPath: audioURL.path, completion: completion)
     }
 }

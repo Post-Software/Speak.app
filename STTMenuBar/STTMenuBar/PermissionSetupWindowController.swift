@@ -33,8 +33,11 @@ final class PermissionSetupWindowController: NSWindowController {
     }
 
     func refreshStatuses() {
-        updateMicrophoneStatus(AVCaptureDevice.authorizationStatus(for: .audio))
-        updateAccessibilityStatus(AccessibilityHelper.isTrusted())
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        let axTrusted = AccessibilityHelper.isTrusted()
+        updateMicrophoneStatus(micStatus)
+        updateAccessibilityStatus(axTrusted)
+        continueButton.isEnabled = (micStatus == .authorized) && axTrusted
     }
 
     private func buildUI() {

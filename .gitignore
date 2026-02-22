@@ -13,6 +13,7 @@ STTMenuBar/.venv/
 build/
 dist/
 DerivedData/
+rust-transcriber/target/
 
 # Local release secrets
 .release.env

@@ -70,21 +70,6 @@ if ! xcodebuild -project "${PROJECT_PATH}" -list | grep -q "${SCHEME}"; then
   exit 1
 fi
 
-if [[ ! -x "${ROOT_DIR}/python/.venv/bin/python" ]]; then
-  echo "Missing Python runtime at ${ROOT_DIR}/python/.venv/bin/python"
-  echo "Recreate it with:"
-  echo "  python3 -m venv python/.venv"
-  echo "  python/.venv/bin/pip install -r python/requirements.txt"
-  exit 1
-fi
-
-if ! find "${ROOT_DIR}/python/.venv/lib" -path "*/site-packages/faster_whisper/__init__.py" -print -quit | grep -q .; then
-  echo "faster-whisper is missing from python/.venv."
-  echo "Install dependencies with:"
-  echo "  python/.venv/bin/pip install -r python/requirements.txt"
-  exit 1
-fi
-
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PLIST_PATH}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${PLIST_PATH}"
 
@@ -122,9 +107,14 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 1
 fi
 
-"${ROOT_DIR}/scripts/patch_bundled_python_refs.sh" "${APP_PATH}"
-"${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
+SIDECAR_PATH="${APP_PATH}/Contents/Resources/bin/speak-transcriber"
+if [[ ! -x "${SIDECAR_PATH}" ]]; then
+  echo "Missing bundled sidecar binary: ${SIDECAR_PATH}"
+  echo "The app must bundle speak-transcriber so end users do not need Rust installed."
+  exit 1
+fi
 
+codesign --force --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${SIDECAR_PATH}"
 codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
