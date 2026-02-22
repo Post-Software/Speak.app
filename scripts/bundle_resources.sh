@@ -6,6 +6,87 @@ RESOURCES="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
 PY_SRC="${ROOT}/python/.venv"
 PY_DEST="${RESOURCES}/python"
 SCRIPT_SRC="${ROOT}/python/transcribe.py"
+ABS_PY_FRAMEWORK_PREFIX="/Library/Frameworks/Python.framework/Versions/"
+
+relpath() {
+  /usr/bin/python3 - "$1" "$2" <<'PY'
+import os
+import sys
+
+print(os.path.relpath(sys.argv[2], os.path.dirname(sys.argv[1])))
+PY
+}
+
+collect_macho_targets() {
+  find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \)
+}
+
+rewrite_absolute_python_framework_refs() {
+  local framework_dest="${PY_DEST}/Python.framework"
+  [ -d "${framework_dest}/Versions" ] || return 0
+
+  while IFS= read -r macho; do
+    [ -z "${macho}" ] && continue
+    deps="$(
+      otool -L "${macho}" 2>/dev/null |
+      tail -n +2 |
+      awk '{print $1}' |
+      awk -v p="${ABS_PY_FRAMEWORK_PREFIX}" 'index($0, p) == 1' |
+      sort -u || true
+    )"
+    ids="$(
+      otool -D "${macho}" 2>/dev/null |
+      tail -n +2 |
+      awk -v p="${ABS_PY_FRAMEWORK_PREFIX}" 'index($0, p) == 1' |
+      sort -u || true
+    )"
+
+    while IFS= read -r old_id; do
+      [ -z "${old_id}" ] && continue
+      rest="${old_id#${ABS_PY_FRAMEWORK_PREFIX}}"
+      version="${rest%%/*}"
+      suffix="${rest#*/}"
+      target="${framework_dest}/Versions/${version}/${suffix}"
+      if [ ! -f "${target}" ]; then
+        echo "Missing bundled target for install name '${old_id}' in '${macho}'"
+        exit 1
+      fi
+      rel_target="$(relpath "${macho}" "${target}")"
+      install_name_tool -id "@loader_path/${rel_target}" "${macho}"
+    done <<< "${ids}"
+
+    while IFS= read -r dep; do
+      [ -z "${dep}" ] && continue
+      rest="${dep#${ABS_PY_FRAMEWORK_PREFIX}}"
+      version="${rest%%/*}"
+      suffix="${rest#*/}"
+      target="${framework_dest}/Versions/${version}/${suffix}"
+      if [ ! -f "${target}" ]; then
+        echo "Missing bundled target for dependency '${dep}' referenced by '${macho}'"
+        exit 1
+      fi
+      rel_target="$(relpath "${macho}" "${target}")"
+      install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}"
+    done <<< "${deps}"
+  done < <(collect_macho_targets)
+}
+
+ensure_no_absolute_python_framework_refs() {
+  unresolved="$(
+    while IFS= read -r macho; do
+      [ -z "${macho}" ] && continue
+      otool -L "${macho}" 2>/dev/null |
+      tail -n +2 |
+      awk '{print $1}' |
+      awk -v p="${ABS_PY_FRAMEWORK_PREFIX}" 'index($0, p) == 1 { print "'"${macho}"' -> " $0 }'
+    done < <(collect_macho_targets)
+  )"
+  if [ -n "${unresolved}" ]; then
+    echo "Unresolved absolute Python.framework dependencies after bundling:"
+    echo "${unresolved}"
+    exit 1
+  fi
+}
 
 if [ ! -d "${PY_SRC}" ]; then
   echo "Missing venv at ${PY_SRC}. Create it with: python3 -m venv python/.venv"
@@ -52,69 +133,24 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
   FRAMEWORK_SRC="${PY3_REAL%%/Versions/*}"
   FRAMEWORK_DEST="${PY_DEST}/Python.framework"
   FRAMEWORK_VERSION_DEST="${FRAMEWORK_DEST}/Versions/${PY_VERSION}"
-  OLD_FRAMEWORK_PREFIX="/Library/Frameworks/Python.framework/Versions/${PY_VERSION}"
 
   if [ -f "${FRAMEWORK_SRC}/Versions/${PY_VERSION}/Python" ]; then
     mkdir -p "${FRAMEWORK_DEST}"
     rsync -a --delete "${FRAMEWORK_SRC}/" "${FRAMEWORK_DEST}/"
     find "${FRAMEWORK_DEST}" -type f -name "python3*-intel64" -delete || true
 
-    while IFS= read -r -d '' macho; do
-      deps="$(otool -L "${macho}" 2>/dev/null | tail -n +2 | awk '{print $1}' | rg "^${OLD_FRAMEWORK_PREFIX}/" | sort -u || true)"
-      ids="$(otool -D "${macho}" 2>/dev/null | tail -n +2 | rg "^${OLD_FRAMEWORK_PREFIX}/" | sort -u || true)"
-      [ -z "${deps}" ] && [ -z "${ids}" ] && continue
+    # Trim non-runtime framework payload to keep app size reasonable.
+    # The venv already carries app dependencies in ${PY_DEST}/lib/pythonX.Y/site-packages.
+    FRAMEWORK_STD_LIB="${FRAMEWORK_VERSION_DEST}/lib/python${PY_VERSION}"
+    rm -rf "${FRAMEWORK_STD_LIB}/site-packages" || true
+    rm -rf "${FRAMEWORK_STD_LIB}/test" || true
+    rm -rf "${FRAMEWORK_STD_LIB}/tkinter/test" || true
+    rm -rf "${FRAMEWORK_VERSION_DEST}/Resources/English.lproj/Documentation" || true
+    find "${FRAMEWORK_VERSION_DEST}" -type d -name "__pycache__" -prune -exec rm -rf {} + || true
+    find "${FRAMEWORK_VERSION_DEST}" -type f -name "*.pyc" -delete || true
 
-      while IFS= read -r old_id; do
-        [ -z "${old_id}" ] && continue
-        suffix="${old_id#${OLD_FRAMEWORK_PREFIX}/}"
-        target="${FRAMEWORK_VERSION_DEST}/${suffix}"
-        if [ ! -f "${target}" ]; then
-          echo "Missing bundled target for install name '${old_id}' in '${macho}'"
-          exit 1
-        fi
-        rel_target="$(
-          /usr/bin/python3 - "${macho}" "${target}" <<'PY'
-import os
-import sys
-
-print(os.path.relpath(sys.argv[2], os.path.dirname(sys.argv[1])))
-PY
-        )"
-        install_name_tool -id "@loader_path/${rel_target}" "${macho}" 2>/dev/null
-      done <<< "${ids}"
-
-      while IFS= read -r dep; do
-        [ -z "${dep}" ] && continue
-        suffix="${dep#${OLD_FRAMEWORK_PREFIX}/}"
-        target="${FRAMEWORK_VERSION_DEST}/${suffix}"
-        if [ ! -f "${target}" ]; then
-          echo "Missing bundled target for dependency '${dep}' referenced by '${macho}'"
-          exit 1
-        fi
-        rel_target="$(
-          /usr/bin/python3 - "${macho}" "${target}" <<'PY'
-import os
-import sys
-
-print(os.path.relpath(sys.argv[2], os.path.dirname(sys.argv[1])))
-PY
-        )"
-        install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}" 2>/dev/null
-      done <<< "${deps}"
-    done < <(find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0)
-
-    unresolved="$(
-      find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \) -print0 |
-      while IFS= read -r -d '' macho; do
-        if otool -L "${macho}" 2>/dev/null | rg -q "${OLD_FRAMEWORK_PREFIX}"; then
-          echo "${macho}"
-        fi
-      done
-    )"
-    if [ -n "${unresolved}" ]; then
-      echo "Unresolved absolute Python.framework dependencies after bundling:"
-      echo "${unresolved}"
-      exit 1
-    fi
   fi
 fi
+
+rewrite_absolute_python_framework_refs
+ensure_no_absolute_python_framework_refs
