@@ -14,8 +14,8 @@ set -euo pipefail
 #   NOTARY_PROFILE
 #
 # Optional env vars:
-#   VERSION (default: 0.1.3)
-#   BUILD_NUMBER (default: 3)
+#   VERSION (default: 0.1.4)
+#   BUILD_NUMBER (default: 4)
 #   SCHEME (default: STTMenuBar)
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,8 +25,8 @@ SCHEME="${SCHEME:-STTMenuBar}"
 CONFIG="Release"
 APP_NAME="Speak"
 
-VERSION="${VERSION:-0.1.3}"
-BUILD_NUMBER="${BUILD_NUMBER:-3}"
+VERSION="${VERSION:-0.1.4}"
+BUILD_NUMBER="${BUILD_NUMBER:-4}"
 
 : "${TEAM_ID:?Set TEAM_ID}"
 : "${DEVELOPER_ID_APP_CERT:?Set DEVELOPER_ID_APP_CERT}"
