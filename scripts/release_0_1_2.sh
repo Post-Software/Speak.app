@@ -130,7 +130,13 @@ if [[ ! -d "${APP_PATH}" ]]; then
   exit 1
 fi
 
-"${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
+if ! "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"; then
+  echo "Bundled Python verification failed after export. Applying fallback relink pass..."
+  "${ROOT_DIR}/scripts/patch_bundled_python_refs.sh" "${APP_PATH}"
+  "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
+  echo "Re-signing app after fallback relink..."
+  codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
+fi
 echo "Model weights are not bundled. End users download a model on first launch."
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
