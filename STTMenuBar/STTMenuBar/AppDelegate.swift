@@ -9,53 +9,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let transcriptionRunner = TranscriptionRunner()
     private let pasteController = PasteController()
     private let settings = Settings.shared
-    private let permissionCoordinator = PermissionCoordinator()
-    private let modelManager = ModelManager.shared
 
     private var isRecording = false
     private var isTranscribing = false
     private var currentRecordingURL: URL?
     private var recordingStartedAt: Date?
-
-    private var permissionSetupWindowController: PermissionSetupWindowController?
-    private var modelSetupWindowController: ModelSetupWindowController?
+    private var setupWindowController: PermissionSetupWindowController?
 
     private var toggleItem: NSMenuItem?
     private var soundsItem: NSMenuItem?
-    private var fallbackWarningShown = false
-    private var lastToggleInvocationAt: TimeInterval = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
         configureHotKeyCallbacks()
-        configureTranscriberCallbacks()
 
-        if permissionCoordinator.hasAllRequiredPermissions() {
+        if hasAllRequiredPermissions() {
             completeLaunchAfterSetup()
         } else {
             showPermissionSetupWindow(activate: true)
-        }
-    }
-
-    func applicationDidBecomeActive(_ notification: Notification) {
-        permissionSetupWindowController?.refreshStatuses()
-        refreshHotKeyRegistration()
-    }
-
-    private func configureTranscriberCallbacks() {
-        transcriptionRunner.onWorkerReady = { [weak self] ready in
-            guard let self else { return }
-            self.modelManager.updateBackendState(backend: ready.backend, fallbackReason: ready.fallbackReason)
-            guard ready.backend == "cpu", self.fallbackWarningShown == false else { return }
-            self.fallbackWarningShown = true
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "CPU Fallback Mode"
-                alert.informativeText = "Speak is running without Metal acceleration. Transcription will be slower on this machine."
-                alert.addButton(withTitle: "OK")
-                alert.runModal()
-            }
         }
     }
 
@@ -69,10 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = StatusIcon.image(color: .systemGreen)
             button.imagePosition = .imageOnly
             statusItem.isVisible = true
+        } else {
+            NSLog("Status item button was nil")
         }
 
         let menu = NSMenu()
-
         let toggle = NSMenuItem(title: "Start Recording", action: #selector(toggleRecording), keyEquivalent: "")
         toggle.target = self
         toggleItem = toggle
@@ -81,10 +54,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let setup = NSMenuItem(title: "Permissions Setup...", action: #selector(openPermissionSetup), keyEquivalent: "")
         setup.target = self
         menu.addItem(setup)
-
-        let modelItem = NSMenuItem(title: "Select your model", action: #selector(openModelSetup), keyEquivalent: "")
-        modelItem.target = self
-        menu.addItem(modelItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -124,22 +93,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyMonitor.onDoubleTap = { [weak self] in
             self?.toggleRecording()
         }
-        hotKeyMonitor.onStartFailure = { [weak self] in
-            self?.showHotkeyPermissionAlert()
+        hotKeyMonitor.onStartFailure = { [weak self] in self?.showHotkeyPermissionAlert() }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if setupWindowController?.window?.isVisible == true {
+            setupWindowController?.refreshStatuses()
         }
     }
 
     @objc private func toggleRecording() {
-        let now = Date().timeIntervalSince1970
-        if now - lastToggleInvocationAt < 0.25 {
-            return
-        }
-        lastToggleInvocationAt = now
-
-        if isTranscribing {
-            return
-        }
-
         if isRecording {
             stopRecording()
         } else {
@@ -148,140 +111,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startRecording() {
-        guard modelManager.needsSetup() == false else {
-            openModelSetup()
-            return
-        }
-
-        permissionCoordinator.requestMicrophoneAccess { [weak self] granted in
-            guard let self else { return }
-            guard granted else {
-                self.showMicrophonePermissionAlert()
-                return
-            }
-
-            do {
-                self.currentRecordingURL = try self.audioRecorder.startRecording()
-                self.recordingStartedAt = Date()
-                self.isRecording = true
-                self.updateStatusIcon()
-                self.updateToggleTitle()
-                if self.settings.soundsEnabled {
-                    self.soundPlayer.playOn()
-                }
-            } catch {
-                NSLog("Failed to start recording: \(error)")
-            }
-        }
-    }
-
-    private func stopRecording() {
-        audioRecorder.stopRecording()
-        isRecording = false
-        updateStatusIcon()
-        updateToggleTitle()
-        if settings.soundsEnabled {
-            soundPlayer.playOff()
-        }
-
-        guard let audioURL = currentRecordingURL else { return }
-        let recordingDuration = Date().timeIntervalSince(recordingStartedAt ?? Date())
-        recordingStartedAt = nil
-
-        setTranscribing(true)
-        transcriptionRunner.transcribe(audioURL: audioURL) { [weak self] result in
-            guard let self else { return }
-            self.setTranscribing(false)
-
-            switch result {
-            case .success(let text):
-                guard !text.isEmpty else {
-                    if recordingDuration < 5.0 {
-                        return
-                    }
-                    let alert = NSAlert()
-                    alert.messageText = "No Transcription Output"
-                    alert.informativeText = "The transcription completed but returned no text. Try a longer or louder recording."
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                    return
-                }
-                self.pasteController.insertText(text)
-            case .failure(let error):
-                NSLog("Transcription failed: \(error)")
-                let alert = NSAlert()
-                alert.messageText = "Transcription Failed"
-                alert.informativeText = error.localizedDescription
-                alert.addButton(withTitle: "OK")
-                alert.runModal()
-            }
-        }
-    }
-
-    private func completeLaunchAfterSetup() {
-        refreshHotKeyRegistration()
-
-        if modelManager.needsSetup() {
-            openModelSetup()
-            return
-        }
-
-        if settings.prewarmOnLaunch {
-            transcriptionRunner.prewarm()
-        }
-    }
-
-    private func refreshHotKeyRegistration() {
-        hotKeyMonitor.stop()
-        guard permissionCoordinator.accessibilityTrusted else { return }
-        hotKeyMonitor.start()
-    }
-
-    private func showPermissionSetupWindow(activate: Bool) {
-        if permissionSetupWindowController == nil {
-            let controller = PermissionSetupWindowController()
-            controller.onRequestMicrophone = { [weak self] in
-                guard let self else { return }
-                self.permissionCoordinator.requestMicrophoneAccess { granted in
-                    if !granted && self.permissionCoordinator.microphoneStatus != .notDetermined {
-                        self.permissionCoordinator.openMicrophoneSettings()
-                    }
-                    self.permissionSetupWindowController?.refreshStatuses()
-                }
-            }
-            controller.onRequestAccessibility = { [weak self] in
-                guard let self else { return }
-                self.permissionCoordinator.requestAccessibilityAccess()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    self.permissionSetupWindowController?.refreshStatuses()
-                    self.refreshHotKeyRegistration()
-                }
-            }
-            controller.onContinue = { [weak self] in
-                guard let self else { return }
-                if self.permissionCoordinator.hasAllRequiredPermissions() {
-                    self.completeLaunchAfterSetup()
-                }
-            }
-            permissionSetupWindowController = controller
-        }
-
-        permissionSetupWindowController?.refreshStatuses()
-        permissionSetupWindowController?.showWindow(nil)
-        if activate {
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        switch authStatus {
+        case .authorized:
+            break
+        case .notDetermined:
             NSApp.activate(ignoringOtherApps: true)
+            audioRecorder.requestMicrophoneAccess { [weak self] granted in
+                let currentStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+                if granted {
+                    self?.startRecording()
+                } else if currentStatus == .denied || currentStatus == .restricted {
+                    self?.showMicrophonePermissionAlert()
+                }
+            }
+            return
+        case .denied, .restricted:
+            showMicrophonePermissionAlert()
+            return
+        @unknown default:
+            showMicrophonePermissionAlert()
+            return
+        }
+
+        transcriptionRunner.cancel()
+        setTranscribing(false)
+
+        do {
+            currentRecordingURL = try audioRecorder.startRecording()
+            recordingStartedAt = Date()
+            isRecording = true
+            updateStatusIcon()
+            updateToggleTitle()
+            if settings.soundsEnabled { soundPlayer.playOn() }
+        } catch {
+            NSLog("Failed to start recording: \(error)")
         }
     }
 
     private func showMicrophonePermissionAlert() {
         let alert = NSAlert()
         alert.messageText = "Microphone Access Required"
-        alert.informativeText = "Speak cannot record until microphone access is enabled."
+        alert.informativeText = "Speak cannot start recording because microphone access is blocked. Open System Settings → Privacy & Security → Microphone and enable Speak."
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Cancel")
         let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            permissionCoordinator.openMicrophoneSettings()
+        if response == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -293,6 +170,103 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.runModal()
     }
 
+    private func completeLaunchAfterSetup() {
+        refreshHotKeyRegistration()
+        if settings.prewarmOnLaunch {
+            transcriptionRunner.prewarm()
+        }
+    }
+
+    private func hasAllRequiredPermissions() -> Bool {
+        let micAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let accessibilityAuthorized = AccessibilityHelper.isTrusted()
+        return micAuthorized && accessibilityAuthorized
+    }
+
+    private func refreshHotKeyRegistration() {
+        hotKeyMonitor.stop()
+        guard AccessibilityHelper.isTrusted() else { return }
+        hotKeyMonitor.start()
+    }
+
+    private func showPermissionSetupWindow(activate: Bool) {
+        if setupWindowController == nil {
+            let controller = PermissionSetupWindowController()
+            controller.onRequestMicrophone = { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                self?.audioRecorder.requestMicrophoneAccess { _ in
+                    self?.setupWindowController?.refreshStatuses()
+                }
+            }
+            controller.onRequestAccessibility = { [weak self] in
+                NSApp.activate(ignoringOtherApps: true)
+                _ = AccessibilityHelper.requestIfNeeded()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    self?.setupWindowController?.refreshStatuses()
+                    self?.refreshHotKeyRegistration()
+                }
+            }
+            controller.onContinue = { [weak self] in
+                self?.completeLaunchAfterSetup()
+            }
+            setupWindowController = controller
+        }
+
+        setupWindowController?.refreshStatuses()
+        setupWindowController?.showWindow(nil)
+        if activate {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func stopRecording() {
+        audioRecorder.stopRecording()
+        isRecording = false
+        updateStatusIcon()
+        updateToggleTitle()
+        if settings.soundsEnabled { soundPlayer.playOff() }
+
+        guard let audioURL = currentRecordingURL else { return }
+        let recordingDuration = Date().timeIntervalSince(recordingStartedAt ?? Date())
+        recordingStartedAt = nil
+
+        setTranscribing(true)
+        transcriptionRunner.transcribe(audioURL: audioURL) { [weak self] result in
+            switch result {
+            case .success(let text):
+                DispatchQueue.main.async {
+                    self?.setTranscribing(false)
+                }
+                guard !text.isEmpty else {
+                    if recordingDuration < 5.0 {
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        let alert = NSAlert()
+                        alert.messageText = "No Transcription Output"
+                        alert.informativeText = "The transcription completed but returned no text. Try a longer or louder recording."
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                    return
+                }
+                DispatchQueue.main.async {
+                    self?.pasteController.insertText(text)
+                }
+            case .failure(let error):
+                NSLog("Transcription failed: \(error)")
+                DispatchQueue.main.async {
+                    self?.setTranscribing(false)
+                    let alert = NSAlert()
+                    alert.messageText = "Transcription Failed"
+                    alert.informativeText = error.localizedDescription
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            }
+        }
+    }
+
     private func updateStatusIcon() {
         if let button = statusItem.button {
             button.image = StatusIcon.image(color: isRecording ? .systemRed : .systemGreen)
@@ -301,7 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateToggleTitle() {
         if isTranscribing {
-            toggleItem?.title = "Transcribing..."
+            toggleItem?.title = "Transcribing…"
             toggleItem?.isEnabled = false
         } else {
             toggleItem?.isEnabled = true
@@ -338,22 +312,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showPermissionSetupWindow(activate: true)
     }
 
-    @objc private func openModelSetup() {
-        if modelSetupWindowController == nil {
-            let controller = ModelSetupWindowController()
-            controller.onComplete = { [weak self] in
-                if self?.settings.prewarmOnLaunch == true {
-                    self?.transcriptionRunner.prewarm()
-                }
-            }
-            modelSetupWindowController = controller
-        }
-        modelSetupWindowController?.open(activate: true)
-    }
-
     @objc private func quitApp() {
         NSApp.terminate(nil)
     }
+
 }
 
 enum StatusIcon {

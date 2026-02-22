@@ -1,59 +1,83 @@
-# Speak (macOS, Local Speech-to-Text)
+# Speak (macOS, Offline Speech-to-Text)
 
-Speak is a menu bar app for macOS that records your voice, transcribes it locally, and inserts text into the focused app.
+Speak is a menu bar app for macOS that records your voice, transcribes it locally with `faster-whisper`, and inserts text into the focused app.
 
-## What Changed
-- Speak no longer bundles a huge model in the app package.
-- On first launch, users choose a model tier and explicitly approve the download after seeing exact size.
-- Transcription runs through a bundled Rust sidecar (`speak-transcriber`).
-- Runtime policy is Metal-first, with automatic CPU fallback warning if Metal is unavailable.
+## What It Does
+- Menu bar only app (`LSUIElement`, no Dock icon).
+- Green icon when idle, red icon while recording.
+- Toggle recording from:
+  - Menu item (`Start Recording` / `Stop Recording`)
+  - Global double-tap modifier hotkey (Option/Command/Control/Shift).
+- Plays native macOS record start/stop sounds.
+- Runs transcription fully offline using bundled Python + bundled model.
+- Pastes transcription into the active app and restores the previous clipboard.
 
-## Model Tiers
-- `Fast (Q4)`
-  - Source: `TrevorJS/voxtral-mini-realtime-gguf`
-  - Lower memory footprint, optimized for speed.
-- `Quality (Full Precision)`
-  - Source: `mistralai/Voxtral-Mini-4B-Realtime-2602`
-  - Higher memory usage, higher quality.
-
-The app fetches and displays exact download size at setup time before download starts.
+## Current Runtime Defaults
+- Model: bundled `medium`
+- Language: English (`en`)
+- Device: CPU
+- Beam size: `1`
 
 ## Permissions
-Speak requires:
-- Microphone (record audio)
-- Accessibility (global hotkey + paste)
+Speak needs:
+- Microphone: to record audio.
+- Accessibility: for global hotkey handling and global paste.
 
-The permission window is built to force a reliable microphone authorization path:
-- `notDetermined`: request system prompt immediately.
-- `denied/restricted`: route user to System Settings and re-check after return.
+Speak shows an in-app permissions window on startup whenever either required permission is missing.
 
 ## Repository Layout
-- `STTMenuBar/` — Xcode project + AppKit app.
-- `rust-transcriber/` — Rust sidecar worker and model manager CLI.
-- `scripts/bundle_resources.sh` — builds and bundles `speak-transcriber` into app resources.
+- `STTMenuBar/` — Xcode project + Swift AppKit app.
+- `python/transcribe.py` — Python transcription worker entrypoint.
+- `python/requirements.txt` — Python dependencies.
+- `models/medium/` — local model directory bundled into app resources at build time.
 
-## Build
-1. Install Rust toolchain (`cargo`) and Xcode tools.
-2. Open `STTMenuBar/STTMenuBar.xcodeproj`.
-3. Build/Run `Speak`.
+## Local Build
+1. Open `STTMenuBar/STTMenuBar.xcodeproj` in Xcode.
+2. Select the `Speak` target and your signing team.
+3. Build/Run.
 
-During build, Xcode runs `scripts/bundle_resources.sh`, which compiles and copies:
-- `rust-transcriber/target/<profile>/speak-transcriber`
-- to `Speak.app/Contents/Resources/bin/speak-transcriber`
+## Build-Time Python Setup (Developer Machine)
+The app bundles a local Python environment from `python/.venv` during build.
 
-## End-User Runtime Requirements
-- End users **do not** need to install Rust, Cargo, Python, or any CLI tooling.
-- The shipped `.app` already contains the `speak-transcriber` runtime binary.
-- Model weights are downloaded in-app on first run after explicit user consent.
-- Only developers/CI building from source need Rust installed.
+```bash
+python3 -m venv python/.venv
+python/.venv/bin/pip install -r python/requirements.txt
+```
 
-## Runtime Notes
-- No model weights are committed to this repository.
-- Model weights are downloaded at first run and stored in:
-  - `~/Library/Application Support/Speak/models/`
-- Model state manifest is stored at:
-  - `~/Library/Application Support/Speak/models/manifest.json`
+## Model Setup (Developer Machine)
+Download the medium model into `models/medium`:
 
-## License Notes
-- App code remains under this repository's license.
-- Voxtral model and Rust dependencies include third-party licenses; see `THIRD_PARTY_NOTICES.md`.
+```bash
+python/.venv/bin/python -m pip install -U huggingface_hub
+python/.venv/bin/python - <<'PY'
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id="Systran/faster-whisper-medium",
+    local_dir="models/medium",
+    local_dir_use_symlinks=False,
+)
+print("Download complete")
+PY
+```
+
+## How Bundling Works
+Xcode build phase copies into app resources:
+- `python/.venv` -> `Speak.app/Contents/Resources/python`
+- `python/transcribe.py` -> `Speak.app/Contents/Resources/python/transcribe.py`
+- `models/medium` -> `Speak.app/Contents/Resources/models/medium`
+
+End users do not need to install Python or download models.
+
+## Manual Transcription Test
+```bash
+python/.venv/bin/python python/transcribe.py \
+  --audio /path/to/audio.wav \
+  --model models/medium \
+  --language en \
+  --device cpu \
+  --local-only
+```
+
+## Notes
+- No analytics or telemetry are included.
+- If Accessibility is not granted, Speak can still copy text to clipboard but cannot reliably paste globally.

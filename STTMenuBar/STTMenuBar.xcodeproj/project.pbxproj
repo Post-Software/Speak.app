@@ -17,12 +17,8 @@
 		A1A1A1A10000000100000008 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000019 /* main.swift */; };
 		A1A1A1A1000000010000000A /* AccessibilityHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001B /* AccessibilityHelper.swift */; };
 		A1A1A1A1000000010000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001C /* Assets.xcassets */; };
+		A1A1A1A1000000010000000C /* PythonWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001D /* PythonWorker.swift */; };
 		A1A1A1A1000000010000000D /* PermissionSetupWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */; };
-		A1A1A1A10000000100000020 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000021 /* ModelCatalog.swift */; };
-		A1A1A1A10000000100000022 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000023 /* ModelManager.swift */; };
-		A1A1A1A10000000100000024 /* TranscriberProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000025 /* TranscriberProcess.swift */; };
-		A1A1A1A10000000100000026 /* PermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000027 /* PermissionCoordinator.swift */; };
-		A1A1A1A10000000100000028 /* ModelSetupWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000029 /* ModelSetupWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,12 +34,8 @@
 		A1A1A1A10000000100000019 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001B /* AccessibilityHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityHelper.swift; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1A1A1A1000000010000001D /* PythonWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonWorker.swift; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSetupWindowController.swift; sourceTree = "<group>"; };
-		A1A1A1A10000000100000021 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
-		A1A1A1A10000000100000023 /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
-		A1A1A1A10000000100000025 /* TranscriberProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriberProcess.swift; sourceTree = "<group>"; };
-		A1A1A1A10000000100000027 /* PermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCoordinator.swift; sourceTree = "<group>"; };
-		A1A1A1A10000000100000029 /* ModelSetupWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSetupWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,19 +62,15 @@
 			children = (
 				A1A1A1A10000000100000019 /* main.swift */,
 				A1A1A1A1000000010000001B /* AccessibilityHelper.swift */,
-				A1A1A1A10000000100000027 /* PermissionCoordinator.swift */,
+				A1A1A1A1000000010000001D /* PythonWorker.swift */,
 				A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */,
-				A1A1A1A10000000100000029 /* ModelSetupWindowController.swift */,
 				A1A1A1A10000000100000011 /* AppDelegate.swift */,
 				A1A1A1A10000000100000012 /* HotKeyMonitor.swift */,
 				A1A1A1A10000000100000013 /* AudioRecorder.swift */,
 				A1A1A1A10000000100000014 /* SystemSounds.swift */,
 				A1A1A1A10000000100000015 /* PasteController.swift */,
 				A1A1A1A10000000100000016 /* TranscriptionRunner.swift */,
-				A1A1A1A10000000100000025 /* TranscriberProcess.swift */,
 				A1A1A1A10000000100000017 /* Settings.swift */,
-				A1A1A1A10000000100000021 /* ModelCatalog.swift */,
-				A1A1A1A10000000100000023 /* ModelManager.swift */,
 				A1A1A1A1000000010000001C /* Assets.xcassets */,
 				A1A1A1A10000000100000018 /* Info.plist */,
 			);
@@ -171,13 +159,15 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/../scripts/bundle_resources.sh",
-				"$(SRCROOT)/../rust-transcriber/Cargo.toml",
-				"$(SRCROOT)/../rust-transcriber/src",
+				"$(SRCROOT)/../python/transcribe.py",
+				"$(SRCROOT)/../python/.venv/bin/python",
+				"$(SRCROOT)/../models/medium",
 			);
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/bin/speak-transcriber",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/python",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/models/medium",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -199,12 +189,8 @@
 				A1A1A1A10000000100000007 /* Settings.swift in Sources */,
 				A1A1A1A10000000100000008 /* main.swift in Sources */,
 				A1A1A1A1000000010000000A /* AccessibilityHelper.swift in Sources */,
+				A1A1A1A1000000010000000C /* PythonWorker.swift in Sources */,
 				A1A1A1A1000000010000000D /* PermissionSetupWindowController.swift in Sources */,
-				A1A1A1A10000000100000020 /* ModelCatalog.swift in Sources */,
-				A1A1A1A10000000100000022 /* ModelManager.swift in Sources */,
-				A1A1A1A10000000100000024 /* TranscriberProcess.swift in Sources */,
-				A1A1A1A10000000100000026 /* PermissionCoordinator.swift in Sources */,
-				A1A1A1A10000000100000028 /* ModelSetupWindowController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
