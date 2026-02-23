@@ -18,6 +18,7 @@
 		A1A1A1A1000000010000000A /* AccessibilityHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001B /* AccessibilityHelper.swift */; };
 		A1A1A1A1000000010000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001C /* Assets.xcassets */; };
 		A1A1A1A1000000010000000C /* PythonWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001D /* PythonWorker.swift */; };
+		A1A1A1A10000000100000029 /* PythonRuntimeEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000028 /* PythonRuntimeEnvironment.swift */; };
 		A1A1A1A1000000010000000D /* PermissionSetupWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */; };
 		A1A1A1A10000000100000020 /* PermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000021 /* PermissionCoordinator.swift */; };
 		A1A1A1A10000000100000022 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000023 /* ModelCatalog.swift */; };
@@ -39,6 +40,7 @@
 		A1A1A1A1000000010000001B /* AccessibilityHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityHelper.swift; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001D /* PythonWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonWorker.swift; sourceTree = "<group>"; };
+		A1A1A1A10000000100000028 /* PythonRuntimeEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRuntimeEnvironment.swift; sourceTree = "<group>"; };
 		A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSetupWindowController.swift; sourceTree = "<group>"; };
 		A1A1A1A10000000100000021 /* PermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCoordinator.swift; sourceTree = "<group>"; };
 		A1A1A1A10000000100000023 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 				A1A1A1A1000000010000001B /* AccessibilityHelper.swift */,
 				A1A1A1A10000000100000021 /* PermissionCoordinator.swift */,
 				A1A1A1A1000000010000001D /* PythonWorker.swift */,
+				A1A1A1A10000000100000028 /* PythonRuntimeEnvironment.swift */,
 				A1A1A1A1000000010000001E /* PermissionSetupWindowController.swift */,
 				A1A1A1A10000000100000027 /* SetupWizardWindowController.swift */,
 				A1A1A1A10000000100000011 /* AppDelegate.swift */,
@@ -200,6 +203,7 @@
 				A1A1A1A10000000100000008 /* main.swift in Sources */,
 				A1A1A1A1000000010000000A /* AccessibilityHelper.swift in Sources */,
 				A1A1A1A1000000010000000C /* PythonWorker.swift in Sources */,
+				A1A1A1A10000000100000029 /* PythonRuntimeEnvironment.swift in Sources */,
 				A1A1A1A1000000010000000D /* PermissionSetupWindowController.swift in Sources */,
 				A1A1A1A10000000100000020 /* PermissionCoordinator.swift in Sources */,
 				A1A1A1A10000000100000022 /* ModelCatalog.swift in Sources */,

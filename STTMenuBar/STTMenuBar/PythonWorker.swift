@@ -63,7 +63,7 @@ final class PythonWorker {
             "--local-only"
         ]
         newProcess.currentDirectoryURL = Bundle.main.resourceURL
-        newProcess.environment = ProcessInfo.processInfo.environment.merging(["PYTHONUNBUFFERED": "1"]) { $1 }
+        newProcess.environment = PythonRuntimeEnvironment.makeEnvironment(for: pythonURL)
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()

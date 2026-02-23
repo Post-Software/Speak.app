@@ -4,7 +4,7 @@ set -euo pipefail
 # Reliable release script for Speak macOS app:
 # - archive
 # - export signed .app (Developer ID)
-# - create DMG using create-dmg
+# - create styled DMG using node-appdmg
 # - notarize DMG
 # - staple + validate
 #
@@ -36,6 +36,18 @@ fi
 VERSION="${VERSION:-0.1.4}"
 BUILD_NUMBER="${BUILD_NUMBER:-4}"
 
+# DMG layout defaults
+DMG_VOLNAME="${DMG_VOLNAME:-${APP_NAME}}"
+DMG_WIN_X="${DMG_WIN_X:-200}"
+DMG_WIN_Y="${DMG_WIN_Y:-120}"
+DMG_WIN_W="${DMG_WIN_W:-720}"
+DMG_WIN_H="${DMG_WIN_H:-420}"
+DMG_ICON_SIZE="${DMG_ICON_SIZE:-128}"
+DMG_APP_X="${DMG_APP_X:-185}"
+DMG_APP_Y="${DMG_APP_Y:-210}"
+DMG_APPS_X="${DMG_APPS_X:-515}"
+DMG_APPS_Y="${DMG_APPS_Y:-210}"
+
 : "${TEAM_ID:?Set TEAM_ID}"
 : "${DEVELOPER_ID_APP_CERT:?Set DEVELOPER_ID_APP_CERT}"
 : "${NOTARY_PROFILE:?Set NOTARY_PROFILE}"
@@ -44,12 +56,15 @@ OUT_DIR="${ROOT_DIR}/dist/${VERSION}"
 ARCHIVE_PATH="${OUT_DIR}/${APP_NAME}.xcarchive"
 EXPORT_DIR="${OUT_DIR}/export"
 DMG_STAGING_DIR="${OUT_DIR}/dmg-staging"
+DMG_ASSETS_DIR="${OUT_DIR}/dmg-assets"
 DMG_PATH="${OUT_DIR}/${APP_NAME}-${VERSION}.dmg"
 EXPORT_OPTIONS_PATH="${OUT_DIR}/ExportOptions.plist"
+APPDMG_SPEC_PATH="${OUT_DIR}/appdmg.json"
+APPDMG_LOG="${OUT_DIR}/appdmg.log"
+BG_IMG="${DMG_ASSETS_DIR}/background.png"
 
 TMP_DMG_DIR="$(mktemp -d /tmp/speak-dmg.XXXXXX)"
 DMG_TMP_PATH="${TMP_DMG_DIR}/${APP_NAME}-${VERSION}.dmg"
-BG_IMG="${TMP_DMG_DIR}/background.png"
 
 cleanup() {
   rm -rf "${TMP_DMG_DIR}" >/dev/null 2>&1 || true
@@ -57,11 +72,29 @@ cleanup() {
 trap cleanup EXIT
 
 rm -rf "${OUT_DIR}"
-mkdir -p "${OUT_DIR}" "${EXPORT_DIR}" "${DMG_STAGING_DIR}"
+mkdir -p "${OUT_DIR}" "${EXPORT_DIR}" "${DMG_STAGING_DIR}" "${DMG_ASSETS_DIR}"
 
-if ! command -v create-dmg >/dev/null 2>&1; then
-  echo "create-dmg is required but not installed."
-  echo "Install it with: brew install create-dmg"
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required to build DMGs via appdmg."
+  echo "Install Node.js and run: npm ci"
+  exit 1
+fi
+
+if ! command -v npx >/dev/null 2>&1; then
+  echo "npx is required to run appdmg."
+  echo "Install Node.js and run: npm ci"
+  exit 1
+fi
+
+if [[ ! -x "${ROOT_DIR}/node_modules/.bin/appdmg" ]]; then
+  echo "Missing local appdmg at ${ROOT_DIR}/node_modules/.bin/appdmg"
+  echo "Run: npm ci"
+  exit 1
+fi
+
+if ! npx --no-install appdmg --version >/dev/null 2>&1; then
+  echo "Unable to execute local appdmg via npx."
+  echo "Run: npm ci"
   exit 1
 fi
 
@@ -224,33 +257,46 @@ fi
 
 cp -R "${APP_PATH}" "${DMG_STAGING_DIR}/"
 
-# Create simple background with in-window install instruction text.
+# Create gray background with in-window install instruction text.
 xcrun swift - "${BG_IMG}" <<'SWIFT'
 import AppKit
 
 let outputPath = CommandLine.arguments[1]
-let width: CGFloat = 640
-let height: CGFloat = 400
+let width: CGFloat = 720
+let height: CGFloat = 420
 
 let image = NSImage(size: NSSize(width: width, height: height))
 image.lockFocus()
-NSColor(calibratedWhite: 0.96, alpha: 1.0).setFill()
+NSColor(calibratedWhite: 0.90, alpha: 1.0).setFill()
 NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
 
-let text = "Drag Speak to Applications to install"
+let title = "Drag Speak into Applications"
+let subtitle = "Install locally in one step"
 let paragraph = NSMutableParagraphStyle()
 paragraph.alignment = .center
 
-let attrs: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 22, weight: .regular),
-    .foregroundColor: NSColor.secondaryLabelColor,
+let titleAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 28, weight: .semibold),
+    .foregroundColor: NSColor(calibratedWhite: 0.20, alpha: 1.0),
     .paragraphStyle: paragraph
 ]
 
-(text as NSString).draw(
-    in: NSRect(x: 24, y: 28, width: width - 48, height: 40),
-    withAttributes: attrs
+let subtitleAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 16, weight: .regular),
+    .foregroundColor: NSColor(calibratedWhite: 0.28, alpha: 1.0),
+    .paragraphStyle: paragraph
+]
+
+(title as NSString).draw(
+    in: NSRect(x: 24, y: 36, width: width - 48, height: 46),
+    withAttributes: titleAttrs
 )
+
+(subtitle as NSString).draw(
+    in: NSRect(x: 24, y: 14, width: width - 48, height: 26),
+    withAttributes: subtitleAttrs
+)
+
 image.unlockFocus()
 
 guard
@@ -265,25 +311,36 @@ else {
 try png.write(to: URL(fileURLWithPath: outputPath))
 SWIFT
 
-create_dmg_args=(
-  --volname "${APP_NAME}"
-  --window-pos 200 120
-  --window-size 640 400
-  --icon-size 128
-  --text-size 13
-  --icon "${APP_NAME}.app" 170 185
-  --hide-extension "${APP_NAME}.app"
-  --app-drop-link 470 185
-  --background "${BG_IMG}"
-  --format UDZO
-  --no-internet-enable
-  "${DMG_TMP_PATH}"
-  "${DMG_STAGING_DIR}"
-)
+cat > "${APPDMG_SPEC_PATH}" <<JSON
+{
+  "title": "${DMG_VOLNAME}",
+  "background": "dmg-assets/background.png",
+  "icon-size": ${DMG_ICON_SIZE},
+  "window": {
+    "position": { "x": ${DMG_WIN_X}, "y": ${DMG_WIN_Y} },
+    "size": { "width": ${DMG_WIN_W}, "height": ${DMG_WIN_H} }
+  },
+  "format": "UDZO",
+  "filesystem": "HFS+",
+  "contents": [
+    { "x": ${DMG_APP_X}, "y": ${DMG_APP_Y}, "type": "file", "path": "dmg-staging/${APP_NAME}.app" },
+    { "x": ${DMG_APPS_X}, "y": ${DMG_APPS_Y}, "type": "link", "path": "/Applications" }
+  ]
+}
+JSON
 
-if ! create-dmg "${create_dmg_args[@]}"; then
-  echo "create-dmg Finder automation failed; retrying with --skip-jenkins fallback."
-  create-dmg --skip-jenkins "${create_dmg_args[@]}"
+rm -f "${APPDMG_LOG}"
+echo "Building DMG with node-appdmg..."
+if ! npx --no-install appdmg "${APPDMG_SPEC_PATH}" "${DMG_TMP_PATH}" > "${APPDMG_LOG}" 2>&1; then
+  echo "appdmg failed. See log: ${APPDMG_LOG}"
+  cat "${APPDMG_LOG}" || true
+  exit 1
+fi
+
+if [[ ! -f "${DMG_TMP_PATH}" ]]; then
+  echo "appdmg did not produce DMG at ${DMG_TMP_PATH}"
+  echo "See log: ${APPDMG_LOG}"
+  exit 1
 fi
 
 mv -f "${DMG_TMP_PATH}" "${DMG_PATH}"
@@ -298,7 +355,7 @@ if ! xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}
 fi
 
 NOTARY_ID="$(
-  /usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
+/usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
 import json
 import sys
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
@@ -307,7 +364,7 @@ print(data.get("id", ""))
 PY
 )"
 NOTARY_STATUS="$(
-  /usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
+/usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
 import json
 import sys
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
@@ -353,4 +410,7 @@ xcrun stapler validate "${DMG_PATH}" || true
 echo "Mic entitlement present: ${MIC_ENTITLEMENT_PRESENT}"
 echo "Notary status: ${NOTARY_STATUS}"
 echo "Stapled: ${STAPLED_STATUS}"
+echo "DMG builder: appdmg"
+echo "appdmg spec: ${APPDMG_SPEC_PATH}"
+echo "appdmg log: ${APPDMG_LOG}"
 echo "Release ready: ${DMG_PATH}"

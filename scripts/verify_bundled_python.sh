@@ -23,6 +23,44 @@ otool_deps() {
     sed -E -n 's/^[[:space:]]+(.+)[[:space:]]+\(compatibility version.*$/\1/p'
 }
 
+resolve_bundled_pythonhome() {
+  local versions_dir="${PY_ROOT}/Python.framework/Versions"
+  [ -d "${versions_dir}" ] || return 1
+
+  local current_link="${versions_dir}/Current"
+  if [ -L "${current_link}" ]; then
+    local target
+    target="$(readlink "${current_link}" || true)"
+    if [ -n "${target}" ]; then
+      local candidate
+      if [[ "${target}" == /* ]]; then
+        candidate="${target}"
+      else
+        candidate="${versions_dir}/${target}"
+      fi
+      if [ -d "${candidate}" ]; then
+        echo "${candidate}"
+        return 0
+      fi
+    fi
+  elif [ -d "${current_link}" ]; then
+    echo "${current_link}"
+    return 0
+  fi
+
+  find "${versions_dir}" -mindepth 1 -maxdepth 1 -type d ! -name Current | sort | head -n 1
+}
+
+run_bundled_python() {
+  local python_bin="$1"
+  shift
+  if [ -n "${PYTHONHOME_VALUE:-}" ]; then
+    PYTHONHOME="${PYTHONHOME_VALUE}" PYTHONUNBUFFERED=1 PYTHONNOUSERSITE=1 "${python_bin}" "$@"
+  else
+    PYTHONUNBUFFERED=1 PYTHONNOUSERSITE=1 "${python_bin}" "$@"
+  fi
+}
+
 missing_arm64=""
 while IFS= read -r file; do
   [ -z "${file}" ] && continue
@@ -65,6 +103,70 @@ if [ -n "${abs_local_refs}" ]; then
   echo "${abs_local_refs}" | sed -n '1,120p'
   exit 1
 fi
+
+PYTHON_BIN=""
+for candidate in "${PY_ROOT}/bin/python3" "${PY_ROOT}/bin/python"; do
+  if [ -x "${candidate}" ]; then
+    PYTHON_BIN="${candidate}"
+    break
+  fi
+done
+if [ -z "${PYTHON_BIN}" ]; then
+  echo "Missing bundled Python executable under ${PY_ROOT}/bin"
+  exit 1
+fi
+
+PYTHONHOME_VALUE="$(resolve_bundled_pythonhome || true)"
+if [ -z "${PYTHONHOME_VALUE}" ]; then
+  echo "Missing bundled Python.framework version directory under ${PY_ROOT}/Python.framework/Versions"
+  exit 1
+fi
+
+SMOKE_OUTPUT=""
+if ! SMOKE_OUTPUT="$(run_bundled_python "${PYTHON_BIN}" -c "import decimal, math; print('python_smoke_ok')" 2>&1)"; then
+  echo "Bundled Python smoke test failed (decimal/math import):"
+  echo "${SMOKE_OUTPUT}" | sed -n '1,200p'
+  exit 1
+fi
+
+TRANSCRIBE_SCRIPT="${PY_ROOT}/transcribe.py"
+if [ ! -f "${TRANSCRIBE_SCRIPT}" ]; then
+  echo "Missing bundled transcription script: ${TRANSCRIBE_SCRIPT}"
+  exit 1
+fi
+
+MODEL_INFO_LOG="$(mktemp /tmp/speak-model-info.XXXXXX)"
+if ! run_bundled_python "${PYTHON_BIN}" "${TRANSCRIBE_SCRIPT}" --model-info --model-id whisper_medium_en > "${MODEL_INFO_LOG}" 2>&1; then
+  echo "Bundled model-info command failed:"
+  cat "${MODEL_INFO_LOG}" | sed -n '1,200p'
+  rm -f "${MODEL_INFO_LOG}"
+  exit 1
+fi
+
+if ! /usr/bin/python3 - "${MODEL_INFO_LOG}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as f:
+    lines = [line.strip() for line in f if line.strip()]
+
+for line in reversed(lines):
+    try:
+        payload = json.loads(line)
+    except Exception:
+        continue
+    if payload.get("id") == "whisper_medium_en" and "download_bytes" in payload:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+then
+  echo "Bundled model-info output did not include expected JSON payload:"
+  cat "${MODEL_INFO_LOG}" | sed -n '1,200p'
+  rm -f "${MODEL_INFO_LOG}"
+  exit 1
+fi
+rm -f "${MODEL_INFO_LOG}"
 
 if [ -d "${APP_PATH}/Contents/Resources/models" ]; then
   echo "Model weights should not be bundled in app resources. Found: ${APP_PATH}/Contents/Resources/models"

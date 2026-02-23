@@ -55,6 +55,13 @@ python3 -m venv python/.venv
 python/.venv/bin/pip install -r python/requirements.txt
 ```
 
+## Release Packaging Prerequisite
+Install Node dependencies before running release scripts:
+
+```bash
+npm ci
+```
+
 ## How Bundling Works
 Xcode build phase copies into app resources:
 - `python/.venv` -> `Speak.app/Contents/Resources/python`

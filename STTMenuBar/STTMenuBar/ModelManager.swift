@@ -274,6 +274,7 @@ final class ModelManager {
         let process = Process()
         process.executableURL = runtime.pythonURL
         process.arguments = [runtime.scriptURL.path] + arguments
+        process.environment = PythonRuntimeEnvironment.makeEnvironment(for: runtime.pythonURL)
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -291,7 +292,12 @@ final class ModelManager {
 
         guard process.terminationStatus == 0 else {
             let message = stderrString.isEmpty ? stdoutString : stderrString
-            throw ManagerError.commandFailed(message.trimmingCharacters(in: .whitespacesAndNewlines))
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.contains("dlopen(/Library/Frameworks/Python.framework") {
+                NSLog("ModelManager: detected invalid bundled Python path resolution: %@", trimmed)
+                throw ManagerError.commandFailed("Bundled Python runtime path is invalid. Reinstall Speak or rebuild release package.")
+            }
+            throw ManagerError.commandFailed(trimmed)
         }
 
         return stdoutString
