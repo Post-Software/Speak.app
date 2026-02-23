@@ -7,6 +7,7 @@ PY_SRC="${ROOT}/python/.venv"
 PY_DEST="${RESOURCES}/python"
 SCRIPT_SRC="${ROOT}/python/transcribe.py"
 ABS_PY_FRAMEWORK_PREFIX="/Library/Frameworks/Python.framework/Versions/"
+MODIFIED_MACHOS=()
 
 relpath() {
   /usr/bin/python3 - "$1" "$2" <<'PY'
@@ -19,6 +20,39 @@ PY
 
 collect_macho_targets() {
   find "${PY_DEST}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \)
+}
+
+mark_modified_macho() {
+  local macho="$1"
+  local existing
+  for existing in "${MODIFIED_MACHOS[@]-}"; do
+    if [[ "${existing}" == "${macho}" ]]; then
+      return
+    fi
+  done
+  MODIFIED_MACHOS+=("${macho}")
+}
+
+ad_hoc_sign_modified_machos() {
+  local macho
+  for macho in "${MODIFIED_MACHOS[@]-}"; do
+    [ -z "${macho}" ] && continue
+    if ! codesign --force --sign - "${macho}" >/dev/null 2>&1; then
+      echo "Failed to ad-hoc sign relinked binary: ${macho}"
+      exit 1
+    fi
+  done
+}
+
+verify_signed_modified_machos() {
+  local macho
+  for macho in "${MODIFIED_MACHOS[@]-}"; do
+    [ -z "${macho}" ] && continue
+    if ! codesign -dvv "${macho}" >/dev/null 2>&1; then
+      echo "Code signature metadata missing for relinked binary: ${macho}"
+      exit 1
+    fi
+  done
 }
 
 rewrite_absolute_python_framework_refs() {
@@ -52,7 +86,8 @@ rewrite_absolute_python_framework_refs() {
         exit 1
       fi
       rel_target="$(relpath "${macho}" "${target}")"
-      install_name_tool -id "@loader_path/${rel_target}" "${macho}"
+      install_name_tool -id "@loader_path/${rel_target}" "${macho}" 2>/dev/null
+      mark_modified_macho "${macho}"
     done <<< "${ids}"
 
     while IFS= read -r dep; do
@@ -66,7 +101,8 @@ rewrite_absolute_python_framework_refs() {
         exit 1
       fi
       rel_target="$(relpath "${macho}" "${target}")"
-      install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}"
+      install_name_tool -change "${dep}" "@loader_path/${rel_target}" "${macho}" 2>/dev/null
+      mark_modified_macho "${macho}"
     done <<< "${deps}"
   done < <(collect_macho_targets)
 }
@@ -137,7 +173,7 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
   if [ -f "${FRAMEWORK_SRC}/Versions/${PY_VERSION}/Python" ]; then
     mkdir -p "${FRAMEWORK_DEST}"
     rsync -a --delete "${FRAMEWORK_SRC}/" "${FRAMEWORK_DEST}/"
-    find "${FRAMEWORK_DEST}" -type f -name "python3*-intel64" -delete || true
+    find "${FRAMEWORK_DEST}" \( -type f -o -type l \) -name "python3*-intel64" -delete || true
 
     # Trim non-runtime framework payload to keep app size reasonable.
     # The venv already carries app dependencies in ${PY_DEST}/lib/pythonX.Y/site-packages.
@@ -148,9 +184,14 @@ if [[ "${PY3_REAL}" == */Python.framework/Versions/*/bin/python3* ]]; then
     rm -rf "${FRAMEWORK_VERSION_DEST}/Resources/English.lproj/Documentation" || true
     find "${FRAMEWORK_VERSION_DEST}" -type d -name "__pycache__" -prune -exec rm -rf {} + || true
     find "${FRAMEWORK_VERSION_DEST}" -type f -name "*.pyc" -delete || true
+    while IFS= read -r -d '' broken_link; do
+      rm -f "${broken_link}"
+    done < <(find -L "${FRAMEWORK_DEST}" -type l -print0 2>/dev/null || true)
 
   fi
 fi
 
 rewrite_absolute_python_framework_refs
 ensure_no_absolute_python_framework_refs
+ad_hoc_sign_modified_machos
+verify_signed_modified_machos

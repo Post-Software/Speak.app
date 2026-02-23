@@ -134,10 +134,27 @@ if ! "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"; then
   echo "Bundled Python verification failed after export. Applying fallback relink pass..."
   "${ROOT_DIR}/scripts/patch_bundled_python_refs.sh" "${APP_PATH}"
   "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
-  echo "Re-signing app after fallback relink..."
-  codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
 fi
 echo "Model weights are not bundled. End users download a model on first launch."
+
+sign_python_executables_with_runtime() {
+  local app_path="$1"
+  local cert="$2"
+  local py_root="${app_path}/Contents/Resources/python"
+  [ -d "${py_root}" ] || return 0
+
+  local file
+  while IFS= read -r file; do
+    [ -z "${file}" ] && continue
+    if file "${file}" | grep -q "Mach-O"; then
+      codesign --force --options runtime --timestamp --sign "${cert}" "${file}"
+    fi
+  done < <(find "${py_root}" -type f \( -path "*/bin/python" -o -path "*/bin/python3" -o -path "*/bin/python3.*" -o -path "*/Python.app/Contents/MacOS/Python" \))
+}
+
+sign_python_executables_with_runtime "${APP_PATH}" "${DEVELOPER_ID_APP_CERT}"
+echo "Re-signing exported app bundle for nested Python Mach-O consistency..."
+codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
   echo "Code signature verification failed for ${APP_PATH}"
@@ -187,27 +204,85 @@ else {
 try png.write(to: URL(fileURLWithPath: outputPath))
 SWIFT
 
-create-dmg \
-  --volname "${APP_NAME}" \
-  --window-pos 200 120 \
-  --window-size 640 400 \
-  --icon-size 128 \
-  --text-size 13 \
-  --icon "${APP_NAME}.app" 170 185 \
-  --hide-extension "${APP_NAME}.app" \
-  --app-drop-link 470 185 \
-  --background "${BG_IMG}" \
-  --format UDZO \
-  --no-internet-enable \
-  "${DMG_TMP_PATH}" \
+create_dmg_args=(
+  --volname "${APP_NAME}"
+  --window-pos 200 120
+  --window-size 640 400
+  --icon-size 128
+  --text-size 13
+  --icon "${APP_NAME}.app" 170 185
+  --hide-extension "${APP_NAME}.app"
+  --app-drop-link 470 185
+  --background "${BG_IMG}"
+  --format UDZO
+  --no-internet-enable
+  "${DMG_TMP_PATH}"
   "${DMG_STAGING_DIR}"
+)
+
+if ! create-dmg "${create_dmg_args[@]}"; then
+  echo "create-dmg Finder automation failed; retrying with --skip-jenkins fallback."
+  create-dmg --skip-jenkins "${create_dmg_args[@]}"
+fi
 
 mv -f "${DMG_TMP_PATH}" "${DMG_PATH}"
 
 codesign --force --sign "${DEVELOPER_ID_APP_CERT}" --timestamp "${DMG_PATH}"
 
-xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait
-xcrun stapler staple "${DMG_PATH}"
+NOTARY_RESULT_JSON="${OUT_DIR}/notary_submit_result.json"
+if ! xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait --output-format json > "${NOTARY_RESULT_JSON}"; then
+  echo "Notary submission failed:"
+  cat "${NOTARY_RESULT_JSON}" || true
+  exit 1
+fi
+
+NOTARY_ID="$(
+  /usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
+import json
+import sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data.get("id", ""))
+PY
+)"
+NOTARY_STATUS="$(
+  /usr/bin/python3 - "${NOTARY_RESULT_JSON}" <<'PY'
+import json
+import sys
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(data.get("status", ""))
+PY
+)"
+
+if [[ "${NOTARY_STATUS}" != "Accepted" ]]; then
+  echo "Notary status is '${NOTARY_STATUS}' (expected 'Accepted')."
+  if [[ -n "${NOTARY_ID}" ]]; then
+    NOTARY_LOG_JSON="${OUT_DIR}/notary_log_${NOTARY_ID}.json"
+    xcrun notarytool log "${NOTARY_ID}" --keychain-profile "${NOTARY_PROFILE}" "${NOTARY_LOG_JSON}" || true
+    if [[ -f "${NOTARY_LOG_JSON}" ]]; then
+      echo "Notary log:"
+      cat "${NOTARY_LOG_JSON}"
+    fi
+  fi
+  exit 1
+fi
+
+echo "Notary accepted (id: ${NOTARY_ID})."
+stapled=0
+for attempt in 1 2 3 4 5 6 7 8; do
+  if xcrun stapler staple "${DMG_PATH}"; then
+    stapled=1
+    break
+  fi
+  echo "Stapler attempt ${attempt}/8 failed. Retrying in 20s..."
+  sleep 20
+done
+
+if [[ "${stapled}" -ne 1 ]]; then
+  echo "Stapling failed after retries."
+  exit 1
+fi
 
 spctl -a -vvv -t open "${DMG_PATH}" || true
 xcrun stapler validate "${DMG_PATH}" || true

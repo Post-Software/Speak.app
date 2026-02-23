@@ -17,6 +17,12 @@ collect_targets() {
   find "${PY_ROOT}" -type f \( -name '*.so' -o -name '*.dylib' -o -name 'Python' -o -path '*/bin/python' -o -path '*/bin/python3' -o -path '*/bin/python3.*' \)
 }
 
+otool_deps() {
+  local macho="$1"
+  otool -L "${macho}" 2>/dev/null |
+    sed -E -n 's/^[[:space:]]+(.+)[[:space:]]+\(compatibility version.*$/\1/p'
+}
+
 missing_arm64=""
 while IFS= read -r file; do
   [ -z "${file}" ] && continue
@@ -45,7 +51,7 @@ while IFS= read -r file; do
         abs_local_refs+="${file} -> ${dep}"$'\n'
         ;;
     esac
-  done < <(otool -L "${file}" 2>/dev/null | tail -n +2 | awk '{print $1}')
+  done < <(otool_deps "${file}")
 done < <(collect_targets)
 
 if [ -n "${abs_framework_refs}" ]; then

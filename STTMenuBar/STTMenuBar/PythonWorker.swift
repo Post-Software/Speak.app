@@ -12,26 +12,15 @@ final class PythonWorker {
     private var lastStderr = ""
 
     func stop() {
-        queue.sync {
-            stdoutHandle?.readabilityHandler = nil
-            stderrHandle?.readabilityHandler = nil
-            stdinHandle = nil
-            stdoutHandle = nil
-            stderrHandle = nil
-            process?.terminate()
-            process = nil
-            currentCompletion = nil
-            buffer.removeAll()
-            lastStderr = ""
-            timeoutTimer?.cancel()
-            timeoutTimer = nil
+        queue.async {
+            self.stopOnQueue(clearCompletion: true)
         }
     }
 
     func transcribe(pythonURL: URL, scriptURL: URL, modelPath: String, audioPath: String, computeType: String, completion: @escaping (Result<String, Error>) -> Void) {
         queue.async {
             if self.currentCompletion != nil {
-                self.stop()
+                self.stopOnQueue(clearCompletion: true)
             }
 
             if self.process?.isRunning != true {
@@ -44,8 +33,8 @@ final class PythonWorker {
             }
 
             self.currentCompletion = completion
-            self.sendRequest(audioPath: audioPath)
-            self.startTimeout()
+            self.sendRequestOnQueue(audioPath: audioPath)
+            self.startTimeoutOnQueue()
         }
     }
 
@@ -61,9 +50,9 @@ final class PythonWorker {
     }
 
     private func startWorker(pythonURL: URL, scriptURL: URL, modelPath: String, computeType: String) throws {
-        let process = Process()
-        process.executableURL = pythonURL
-        process.arguments = [
+        let newProcess = Process()
+        newProcess.executableURL = pythonURL
+        newProcess.arguments = [
             scriptURL.path,
             "--worker",
             "--model", modelPath,
@@ -73,110 +62,182 @@ final class PythonWorker {
             "--device", "cpu",
             "--local-only"
         ]
-        process.currentDirectoryURL = Bundle.main.resourceURL
-        process.environment = (ProcessInfo.processInfo.environment.merging(["PYTHONUNBUFFERED": "1"]) { $1 })
+        newProcess.currentDirectoryURL = Bundle.main.resourceURL
+        newProcess.environment = ProcessInfo.processInfo.environment.merging(["PYTHONUNBUFFERED": "1"]) { $1 }
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        newProcess.standardInput = stdinPipe
+        newProcess.standardOutput = stdoutPipe
+        newProcess.standardError = stderrPipe
 
         stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if data.isEmpty { return }
-            self?.handleStdout(data)
+            self?.queue.async {
+                self?.handleStdoutOnQueue(data)
+            }
         }
         stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if data.isEmpty { return }
-            if let text = String(data: data, encoding: .utf8) {
-                self?.lastStderr.append(text)
+            self?.queue.async {
+                if let text = String(data: data, encoding: .utf8) {
+                    self?.lastStderr.append(text)
+                }
             }
         }
 
-        process.terminationHandler = { [weak self] proc in
-            guard let self else { return }
-            if self.currentCompletion != nil {
-                let message = self.lastStderr.isEmpty ? "Python worker exited unexpectedly." : self.lastStderr
-                self.finish(.failure(NSError(domain: "Transcription", code: Int(proc.terminationStatus), userInfo: [NSLocalizedDescriptionKey: message])))
+        newProcess.terminationHandler = { [weak self] proc in
+            self?.queue.async {
+                self?.handleTerminationOnQueue(proc)
             }
         }
 
-        try process.run()
-        self.process = process
+        try newProcess.run()
+        self.process = newProcess
         self.stdinHandle = stdinPipe.fileHandleForWriting
         self.stdoutHandle = stdoutPipe.fileHandleForReading
         self.stderrHandle = stderrPipe.fileHandleForReading
         self.buffer.removeAll()
         self.lastStderr = ""
+        NSLog("PythonWorker: started pid=%d modelPath=%@", newProcess.processIdentifier, modelPath)
     }
 
-    private func sendRequest(audioPath: String) {
+    private func sendRequestOnQueue(audioPath: String) {
         guard process?.isRunning == true else {
-            finish(.failure(NSError(domain: "Transcription", code: -4, userInfo: [NSLocalizedDescriptionKey: "Transcription worker not running."])))
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -4, userInfo: [NSLocalizedDescriptionKey: "Transcription worker not running."])))
             return
         }
         let request: [String: String] = ["audio": audioPath]
         guard let data = try? JSONSerialization.data(withJSONObject: request),
               var line = String(data: data, encoding: .utf8) else {
-            currentCompletion?(.failure(NSError(domain: "Transcription", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode request"])) )
-            currentCompletion = nil
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode request"])))
             return
         }
         line.append("\n")
-        if let bytes = line.data(using: .utf8) {
-            try? stdinHandle?.write(contentsOf: bytes)
+        guard let bytes = line.data(using: .utf8) else {
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode request"])))
+            return
+        }
+        do {
+            try stdinHandle?.write(contentsOf: bytes)
+        } catch {
+            let message = "Failed to send transcription request to worker: \(error.localizedDescription)"
+            stopOnQueue(clearCompletion: false)
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -6, userInfo: [NSLocalizedDescriptionKey: message])))
         }
     }
 
-    private func handleStdout(_ data: Data) {
+    private func handleStdoutOnQueue(_ data: Data) {
         buffer.append(data)
         while let range = buffer.range(of: Data([0x0A])) { // newline
             let lineData = buffer.subdata(in: 0..<range.lowerBound)
             buffer.removeSubrange(0...range.lowerBound)
             guard let line = String(data: lineData, encoding: .utf8), !line.isEmpty else { continue }
-            handleResponseLine(line)
+            handleResponseLineOnQueue(line)
         }
     }
 
-    private func handleResponseLine(_ line: String) {
+    private func handleResponseLineOnQueue(_ line: String) {
         guard let data = line.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            finish(.failure(NSError(domain: "Transcription", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])))
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])))
             return
         }
 
         if let ok = json["ok"] as? Bool, ok {
             let text = (json["text"] as? String) ?? ""
-            finish(.success(text))
+            finishOnQueue(.success(text))
         } else {
             let message = (json["error"] as? String) ?? "Unknown error"
-            finish(.failure(NSError(domain: "Transcription", code: -3, userInfo: [NSLocalizedDescriptionKey: message])))
+            finishOnQueue(.failure(NSError(domain: "Transcription", code: -3, userInfo: [NSLocalizedDescriptionKey: message])))
         }
     }
 
-    private func finish(_ result: Result<String, Error>) {
+    private func finishOnQueue(_ result: Result<String, Error>) {
         timeoutTimer?.cancel()
         timeoutTimer = nil
         let completion = currentCompletion
         currentCompletion = nil
+        guard completion != nil else { return }
         DispatchQueue.main.async {
             completion?(result)
         }
     }
 
-    private func startTimeout() {
+    private func startTimeoutOnQueue() {
         timeoutTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + 120)
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            self.stop()
-            self.finish(.failure(NSError(domain: "Transcription", code: -5, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out."])))
+            NSLog("PythonWorker: timed out waiting for transcription response.")
+            self.stopOnQueue(clearCompletion: false)
+            self.finishOnQueue(.failure(NSError(domain: "Transcription", code: -5, userInfo: [NSLocalizedDescriptionKey: "Transcription timed out."])))
         }
         timeoutTimer = timer
         timer.resume()
+    }
+
+    private func stopOnQueue(clearCompletion: Bool) {
+        timeoutTimer?.cancel()
+        timeoutTimer = nil
+        stdoutHandle?.readabilityHandler = nil
+        stderrHandle?.readabilityHandler = nil
+        if let process {
+            process.terminationHandler = nil
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+        stdinHandle = nil
+        stdoutHandle = nil
+        stderrHandle = nil
+        process = nil
+        buffer.removeAll()
+        lastStderr = ""
+        if clearCompletion {
+            currentCompletion = nil
+        }
+    }
+
+    private func handleTerminationOnQueue(_ terminatedProcess: Process) {
+        if let currentProcess = process, currentProcess !== terminatedProcess {
+            return
+        }
+
+        NSLog(
+            "PythonWorker: worker terminated status=%d reason=%@",
+            terminatedProcess.terminationStatus,
+            terminatedProcess.terminationReason == .uncaughtSignal ? "signal" : "exit"
+        )
+
+        stdoutHandle?.readabilityHandler = nil
+        stderrHandle?.readabilityHandler = nil
+        stdinHandle = nil
+        stdoutHandle = nil
+        stderrHandle = nil
+        process = nil
+        timeoutTimer?.cancel()
+        timeoutTimer = nil
+        buffer.removeAll()
+
+        guard currentCompletion != nil else {
+            lastStderr = ""
+            return
+        }
+
+        var message = lastStderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.isEmpty {
+            message = "Python worker exited unexpectedly."
+        }
+        if terminatedProcess.terminationReason == .uncaughtSignal && terminatedProcess.terminationStatus == 9 {
+            message += " macOS killed the worker (signal 9), often due to invalid code signing on bundled Python binaries."
+            NSLog("PythonWorker: detected possible code-signing kill (SIGKILL).")
+        }
+        lastStderr = ""
+        finishOnQueue(.failure(NSError(domain: "Transcription", code: Int(terminatedProcess.terminationStatus), userInfo: [NSLocalizedDescriptionKey: message])))
     }
 }

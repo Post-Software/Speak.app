@@ -30,18 +30,24 @@ final class PermissionCoordinator {
     }
 
     func requestMicrophoneAccess(completion: @escaping (Bool) -> Void) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async {
+                self.requestMicrophoneAccess(completion: completion)
+            }
+            return
+        }
+
         let currentStatus = microphoneStatus
+        NSLog("Microphone permission request path captureStatus=%ld", currentStatus.rawValue)
 
         switch currentStatus {
         case .authorized:
             completion(true)
         case .notDetermined:
             NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.async {
-                AVCaptureDevice.requestAccess(for: .audio) { granted in
-                    DispatchQueue.main.async {
-                        completion(granted)
-                    }
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async {
+                    completion(granted)
                 }
             }
         case .denied, .restricted:
