@@ -45,8 +45,14 @@ enum ModelCatalog {
 }
 
 struct RemoteModelInfo: Codable {
+    enum SizeSource: String, Codable {
+        case exact
+        case fallback
+    }
+
     let id: String
     let repo: String
     let displayName: String
     let downloadBytes: Int64
+    let sizeSource: SizeSource
 }

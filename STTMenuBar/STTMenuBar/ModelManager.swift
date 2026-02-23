@@ -102,12 +102,15 @@ final class ModelManager {
                       let bytesNumber = payload["download_bytes"] as? NSNumber else {
                     throw ManagerError.commandFailed("Could not parse model metadata response.")
                 }
+                let sizeSourceRaw = payload["size_source"] as? String ?? "exact"
+                let sizeSource = RemoteModelInfo.SizeSource(rawValue: sizeSourceRaw) ?? .exact
 
                 let info = RemoteModelInfo(
                     id: id,
                     repo: repo,
                     displayName: displayName,
-                    downloadBytes: bytesNumber.int64Value
+                    downloadBytes: bytesNumber.int64Value,
+                    sizeSource: sizeSource
                 )
 
                 DispatchQueue.main.async {

@@ -17,6 +17,7 @@ final class SetupWizardWindowController: NSWindowController {
     private let modelPicker = NSPopUpButton(frame: .zero, pullsDown: false)
     private let modelDescriptionLabel = NSTextField(labelWithString: "")
     private let modelSizeLabel = NSTextField(labelWithString: "")
+    private let modelSizeBadgeLabel = NSTextField(labelWithString: "Estimated")
     private let consentCheckbox = NSButton(checkboxWithTitle: "I agree to download this model", target: nil, action: nil)
     private let downloadButton = NSButton(title: "Download & Activate", target: nil, action: nil)
     private let modelSpinner = NSProgressIndicator()
@@ -38,6 +39,8 @@ final class SetupWizardWindowController: NSWindowController {
         window.title = "Speak Setup"
         window.center()
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 680, height: 510)
+        window.maxSize = NSSize(width: 840, height: 1200)
 
         super.init(window: window)
         buildUI()
@@ -66,6 +69,7 @@ final class SetupWizardWindowController: NSWindowController {
         } else {
             currentInfo = nil
             modelSizeLabel.stringValue = "Complete Step 1 first."
+            modelSizeBadgeLabel.isHidden = true
             modelStatusLabel.stringValue = ""
             downloadButton.isEnabled = false
         }
@@ -158,15 +162,40 @@ final class SetupWizardWindowController: NSWindowController {
         root.addArrangedSubview(modelPicker)
 
         modelDescriptionLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        modelDescriptionLabel.maximumNumberOfLines = 0
         modelSizeLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        modelSizeBadgeLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        modelSizeBadgeLabel.textColor = .systemOrange
+        modelSizeBadgeLabel.isHidden = true
+        modelSizeBadgeLabel.wantsLayer = true
+        modelSizeBadgeLabel.alignment = .center
+        modelSizeBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        modelSizeBadgeLabel.lineBreakMode = .byClipping
+        modelSizeBadgeLabel.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.12)
+        modelSizeBadgeLabel.drawsBackground = true
+        modelSizeBadgeLabel.layer?.cornerRadius = 4
+        modelSizeBadgeLabel.layer?.masksToBounds = true
 
-        modelStatusLabel.maximumNumberOfLines = 0
         modelStatusLabel.textColor = .secondaryLabelColor
+        configureWrappingLabel(modelDescriptionLabel)
+        configureWrappingLabel(modelSizeLabel)
+        configureWrappingLabel(modelStatusLabel)
+
+        let sizeRow = NSStackView(views: [modelSizeLabel, modelSizeBadgeLabel, NSView()])
+        sizeRow.orientation = .horizontal
+        sizeRow.alignment = .centerY
+        sizeRow.spacing = 8
 
         root.addArrangedSubview(modelDescriptionLabel)
-        root.addArrangedSubview(modelSizeLabel)
+        root.addArrangedSubview(sizeRow)
         root.addArrangedSubview(modelStatusLabel)
+        NSLayoutConstraint.activate([
+            modelDescriptionLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 620),
+            sizeRow.widthAnchor.constraint(lessThanOrEqualToConstant: 620),
+            modelSizeLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+            modelSizeBadgeLabel.widthAnchor.constraint(equalToConstant: 72),
+            modelSizeBadgeLabel.heightAnchor.constraint(equalToConstant: 18),
+            modelStatusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 620)
+        ])
 
         consentCheckbox.target = self
         consentCheckbox.action = #selector(consentChanged)
@@ -271,6 +300,7 @@ final class SetupWizardWindowController: NSWindowController {
 
         currentInfo = nil
         modelSizeLabel.stringValue = "Checking exact download size..."
+        modelSizeBadgeLabel.isHidden = true
         modelStatusLabel.stringValue = ""
         modelStatusLabel.textColor = .secondaryLabelColor
         downloadButton.isEnabled = false
@@ -283,12 +313,14 @@ final class SetupWizardWindowController: NSWindowController {
             case .success(let info):
                 self.currentInfo = info
                 self.modelSizeLabel.stringValue = "Download size: \(ByteCountFormatter.string(fromByteCount: info.downloadBytes, countStyle: .file))"
+                self.modelSizeBadgeLabel.isHidden = (info.sizeSource == .exact)
                 self.modelStatusLabel.stringValue = ""
                 self.modelStatusLabel.textColor = .secondaryLabelColor
             case .failure(let error):
                 self.currentInfo = nil
                 self.modelSizeLabel.stringValue = "Download size unavailable"
-                self.modelStatusLabel.stringValue = "Could not reach model source. Check internet and try again.\n\(error.localizedDescription)"
+                self.modelSizeBadgeLabel.isHidden = true
+                self.modelStatusLabel.stringValue = "Could not reach model source. Check internet and try again.\n\(self.compactErrorMessage(error))"
                 self.modelStatusLabel.textColor = .systemRed
             }
 
@@ -355,7 +387,7 @@ final class SetupWizardWindowController: NSWindowController {
                 self.close()
             case .failure(let error):
                 self.modelStatusLabel.textColor = .systemRed
-                self.modelStatusLabel.stringValue = "Model download failed. \(error.localizedDescription)"
+                self.modelStatusLabel.stringValue = "Model download failed. \(self.compactErrorMessage(error))"
             }
         }
     }
@@ -365,5 +397,34 @@ final class SetupWizardWindowController: NSWindowController {
         consentCheckbox.isEnabled = enabled && permissionsGranted
         microphoneButton.isEnabled = enabled
         accessibilityButton.isEnabled = enabled
+    }
+
+    private func configureWrappingLabel(_ label: NSTextField) {
+        label.maximumNumberOfLines = 0
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if let cell = label.cell as? NSTextFieldCell {
+            cell.wraps = true
+            cell.lineBreakMode = .byCharWrapping
+            cell.truncatesLastVisibleLine = false
+            cell.isScrollable = false
+        }
+    }
+
+    private func compactErrorMessage(_ error: Error) -> String {
+        let trimmed = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "Unknown error."
+        }
+
+        let lines = trimmed
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+            .prefix(4)
+            .joined(separator: "\n")
+
+        if lines.count > 380 {
+            return String(lines.prefix(380)) + "…"
+        }
+        return lines
     }
 }

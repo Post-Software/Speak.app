@@ -14,14 +14,17 @@ MODEL_SPECS = {
     "whisper_small_en": {
         "repo": "Systran/faster-whisper-small.en",
         "display_name": "Small (Fastest)",
+        "fallback_bytes": 500_000_000,
     },
     "whisper_medium_en": {
         "repo": "Systran/faster-whisper-medium.en",
         "display_name": "Medium (Recommended)",
+        "fallback_bytes": 1_500_000_000,
     },
     "whisper_large_v3": {
         "repo": "Systran/faster-whisper-large-v3",
         "display_name": "Large v3 (Best Accuracy)",
+        "fallback_bytes": 3_000_000_000,
     },
 }
 
@@ -111,7 +114,7 @@ def compute_repo_size(repo_id):
     if total > 0:
         return total
 
-    for entry in api.list_repo_tree(repo_id=repo_id, recursive=True, expand=True):
+    for entry in api.list_repo_tree(repo_id=repo_id, recursive=True):
         if getattr(entry, "type", None) != "file":
             continue
         size = getattr(entry, "size", None)
@@ -121,18 +124,51 @@ def compute_repo_size(repo_id):
     return total
 
 
+def normalize_error_message(exc):
+    message = str(exc).strip()
+    if not message:
+        return "Unknown error"
+
+    if "nodename nor servname provided" in message:
+        return "Could not connect to Hugging Face. Check your internet connection."
+
+    if "status code 400" in message and "/api/models/" in message:
+        return "Model metadata API request failed (400). Please update Speak or try again later."
+
+    if "Please check your internet connection and try again." in message:
+        return "Could not download model from Hugging Face. Check your internet connection and try again."
+
+    if len(message) > 280:
+        return f"{message[:280]}…"
+    return message
+
+
 def handle_model_info(args):
     if not args.model_id:
         raise ValueError("--model-id is required for --model-info")
 
     spec = require_model_spec(args.model_id)
-    total_bytes = compute_repo_size(spec["repo"])
+    total_bytes = int(spec.get("fallback_bytes", 0))
+    size_source = "fallback"
+
+    try:
+        computed = compute_repo_size(spec["repo"])
+        if isinstance(computed, int) and computed > 0:
+            total_bytes = computed
+            size_source = "exact"
+    except Exception as exc:
+        # Keep setup flow usable even when metadata lookup is temporarily failing.
+        print(
+            f"Model info warning ({args.model_id}): {normalize_error_message(exc)}",
+            file=sys.stderr,
+        )
 
     payload = {
         "id": args.model_id,
         "repo": spec["repo"],
         "display_name": spec["display_name"],
         "download_bytes": int(total_bytes),
+        "size_source": size_source,
     }
     print(json.dumps(payload))
     return 0
@@ -157,7 +193,6 @@ def handle_download_model(args):
         snapshot_download(
             repo_id=spec["repo"],
             local_dir=staging_dir,
-            local_dir_use_symlinks=False,
         )
 
         if os.path.isdir(target_dir):
@@ -197,7 +232,7 @@ def main():
         if args.delete_model:
             return handle_delete_model(args)
     except Exception as e:
-        print(str(e), file=sys.stderr)
+        print(normalize_error_message(e), file=sys.stderr)
         return 4
 
     if not args.worker:

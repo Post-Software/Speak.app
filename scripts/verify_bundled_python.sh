@@ -71,5 +71,29 @@ if [ -d "${APP_PATH}/Contents/Resources/models" ]; then
   exit 1
 fi
 
+INFO_PLIST="${APP_PATH}/Contents/Info.plist"
+if [ ! -f "${INFO_PLIST}" ]; then
+  echo "Missing app Info.plist: ${INFO_PLIST}"
+  exit 1
+fi
+
+if ! /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "${INFO_PLIST}" >/dev/null 2>&1; then
+  echo "Missing NSMicrophoneUsageDescription in app Info.plist"
+  exit 1
+fi
+
+APP_BINARY="${APP_PATH}/Contents/MacOS/Speak"
+if [ -f "${APP_BINARY}" ]; then
+  ENT_TMP="$(mktemp /tmp/speak-entitlements.XXXXXX)"
+  if /usr/bin/codesign -d --entitlements :- "${APP_BINARY}" 2>/dev/null > "${ENT_TMP}"; then
+    if ! grep -q "<key>com.apple.security.device.audio-input</key>" "${ENT_TMP}"; then
+      echo "Missing com.apple.security.device.audio-input entitlement on ${APP_BINARY}"
+      rm -f "${ENT_TMP}"
+      exit 1
+    fi
+  fi
+  rm -f "${ENT_TMP}"
+fi
+
 echo "Bundled Python verification passed for: ${APP_PATH}"
 echo "Verified no bundled model weights in app resources."

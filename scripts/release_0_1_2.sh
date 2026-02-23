@@ -129,6 +129,45 @@ if [[ ! -d "${APP_PATH}" ]]; then
   echo "Export failed: ${APP_PATH} not found"
   exit 1
 fi
+APP_BINARY_PATH="${APP_PATH}/Contents/MacOS/${APP_NAME}"
+APP_INFO_PATH="${APP_PATH}/Contents/Info.plist"
+APP_ENTITLEMENTS_PATH="${OUT_DIR}/app.entitlements.plist"
+
+extract_app_entitlements() {
+  local app_binary="$1"
+  local ent_path="$2"
+  if ! /usr/bin/codesign -d --entitlements :- "${app_binary}" 2>/dev/null > "${ent_path}"; then
+    echo "Failed to extract signing entitlements from ${app_binary}"
+    exit 1
+  fi
+}
+
+verify_mic_usage_description() {
+  local info_plist="$1"
+  if ! /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "${info_plist}" >/dev/null 2>&1; then
+    echo "Missing NSMicrophoneUsageDescription in ${info_plist}"
+    exit 1
+  fi
+}
+
+has_mic_entitlement() {
+  local app_binary="$1"
+  local tmp_ent
+  tmp_ent="$(mktemp /tmp/speak-entitlements.XXXXXX)"
+  if ! /usr/bin/codesign -d --entitlements :- "${app_binary}" 2>/dev/null > "${tmp_ent}"; then
+    rm -f "${tmp_ent}"
+    return 1
+  fi
+  if grep -q "<key>com.apple.security.device.audio-input</key>" "${tmp_ent}"; then
+    rm -f "${tmp_ent}"
+    return 0
+  fi
+  rm -f "${tmp_ent}"
+  return 1
+}
+
+extract_app_entitlements "${APP_BINARY_PATH}" "${APP_ENTITLEMENTS_PATH}"
+verify_mic_usage_description "${APP_INFO_PATH}"
 
 if ! "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"; then
   echo "Bundled Python verification failed after export. Applying fallback relink pass..."
@@ -149,15 +188,37 @@ sign_python_executables_with_runtime() {
     if file "${file}" | grep -q "Mach-O"; then
       codesign --force --options runtime --timestamp --sign "${cert}" "${file}"
     fi
-  done < <(find "${py_root}" -type f \( -path "*/bin/python" -o -path "*/bin/python3" -o -path "*/bin/python3.*" -o -path "*/Python.app/Contents/MacOS/Python" \))
+  done < <(find "${py_root}" -type f \( -path "*/bin/python" -o -path "*/bin/python3" -o -path "*/bin/python3.*" -o -path "*/Python.framework/Versions/*/Python" -o -path "*/Python.app/Contents/MacOS/Python" \))
+}
+
+sign_python_framework_bundles_with_runtime() {
+  local app_path="$1"
+  local cert="$2"
+  local py_root="${app_path}/Contents/Resources/python"
+  [ -d "${py_root}" ] || return 0
+
+  local fw
+  while IFS= read -r fw; do
+    [ -z "${fw}" ] && continue
+    codesign --force --deep --options runtime --timestamp --sign "${cert}" "${fw}"
+  done < <(find "${py_root}" -type d -path "*/Python.framework")
 }
 
 sign_python_executables_with_runtime "${APP_PATH}" "${DEVELOPER_ID_APP_CERT}"
+sign_python_framework_bundles_with_runtime "${APP_PATH}" "${DEVELOPER_ID_APP_CERT}"
 echo "Re-signing exported app bundle for nested Python Mach-O consistency..."
-codesign --force --deep --options runtime --timestamp --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
+codesign --force --options runtime --timestamp --entitlements "${APP_ENTITLEMENTS_PATH}" --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
   echo "Code signature verification failed for ${APP_PATH}"
+  exit 1
+fi
+
+MIC_ENTITLEMENT_PRESENT="no"
+if has_mic_entitlement "${APP_BINARY_PATH}"; then
+  MIC_ENTITLEMENT_PRESENT="yes"
+else
+  echo "Missing com.apple.security.device.audio-input entitlement on ${APP_BINARY_PATH}"
   exit 1
 fi
 
@@ -270,9 +331,11 @@ fi
 
 echo "Notary accepted (id: ${NOTARY_ID})."
 stapled=0
+STAPLED_STATUS="no"
 for attempt in 1 2 3 4 5 6 7 8; do
   if xcrun stapler staple "${DMG_PATH}"; then
     stapled=1
+    STAPLED_STATUS="yes"
     break
   fi
   echo "Stapler attempt ${attempt}/8 failed. Retrying in 20s..."
@@ -287,4 +350,7 @@ fi
 spctl -a -vvv -t open "${DMG_PATH}" || true
 xcrun stapler validate "${DMG_PATH}" || true
 
+echo "Mic entitlement present: ${MIC_ENTITLEMENT_PRESENT}"
+echo "Notary status: ${NOTARY_STATUS}"
+echo "Stapled: ${STAPLED_STATUS}"
 echo "Release ready: ${DMG_PATH}"
