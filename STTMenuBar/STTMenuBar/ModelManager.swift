@@ -484,7 +484,7 @@ final class ModelManager: ModelManaging {
         guard uiTestMode else { return nil }
 
         let sizeByModelID: [String: Int64] = [
-            ModelCatalog.parakeetTdtV3.id: 3_220_000_000,
+            ModelCatalog.parakeetTdtV3.id: 478_517_071,
             ModelCatalog.smallEN.id: 490_000_000,
             ModelCatalog.mediumEN.id: 1_530_000_000,
             ModelCatalog.largeV3.id: 3_080_000_000

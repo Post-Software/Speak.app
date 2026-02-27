@@ -26,7 +26,7 @@ Step 2: Model download
 - `Large v3 (Best Accuracy)` → `Systran/faster-whisper-large-v3`
 
 Speak fetches exact download size at runtime before consent.
-Parakeet setup keeps the selection when runtime is installable and only auto-switches to Medium on hard unsupported runtime.
+Parakeet setup keeps the selection when runtime is installable and only auto-switches to Small on hard unsupported runtime.
 
 ## Model Storage and Switching
 - Models are stored in:
@@ -75,6 +75,36 @@ npm ci
 - Speak uses Sparkle 2 for in-app update checks and install prompts.
 - Feed URL: `https://post-software.github.io/Speak.app/appcast.xml`
 - First install still uses DMG. Subsequent updates are delivered in-app from signed ZIP archives.
+- In-app updates do not require manually dragging a new app from DMG each time.
+- Current update strategy is full ZIP archives (delta/binary patch updates are not enabled yet).
+
+## Pre-Merge Release Gate
+Run all automated checks before merging:
+
+```bash
+xcodebuild test -project STTMenuBar/STTMenuBar.xcodeproj -scheme STTMenuBar -destination 'platform=macOS'
+cargo test --manifest-path rust/parakeet-worker/Cargo.toml
+python3 -m py_compile python/transcribe.py
+scripts/release.sh
+```
+
+Required results:
+- Swift unit/UI tests pass.
+- Rust worker tests pass.
+- Python syntax check passes.
+- Release pipeline completes with notarization accepted and DMG stapled.
+
+Manual checks before sharing builds:
+- Fresh install flow: permissions -> model install -> transcription -> paste.
+- Whisper regression: Small/Medium/Large install and switching still work.
+- Error routing: transient failures do not reopen setup, setup-recoverable failures do.
+- Audio stress: repeated recordings under moderate load with no persistent failures.
+- Sparkle update flow: old build updates in-app successfully.
+- No-update flow: clean up-to-date response.
+
+Console warning triage policy:
+- Non-blocking: Sparkle gentle-reminder warning, AddInstanceForFactory noise, Reporter disconnected, task-name-port warning.
+- Watchlist: `HALC_ProxyIOContext ... skipping cycle due to overload` (treat as blocker only if reproducible audio/transcription degradation appears in normal usage).
 
 ### Sparkle Key Management
 - `SUPublicEDKey` lives in `Info.plist`.
@@ -95,6 +125,10 @@ npm ci
 - Sparkle signature output (`dist/<version>/sparkle-signature.txt`)
 - Sparkle appcast XML (`dist/<version>/appcast.xml`)
 - Updated canonical feed file (`docs/appcast.xml`)
+
+### Branch Feed Testing
+- GitHub Pages source can be pointed to a feature branch for pre-merge update testing (for example `codex/parakeet-v0.2` at `/docs`).
+- Before merging to `master`, ensure `docs/appcast.xml` exists on `master` and switch Pages source back to `master/docs`.
 
 ## How Bundling Works
 Xcode build phase copies into app resources:

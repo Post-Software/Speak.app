@@ -54,4 +54,29 @@ final class UpdateControllerTests: XCTestCase {
         let hasItem = menu.items.contains { $0.title == "Check for Updates..." }
         XCTAssertTrue(hasItem)
     }
+
+    func testStatusMenuContainsSingleSetupAndModelItem() {
+        let permissionCoordinator = StubPermissionCoordinator(micStatus: .authorized, axTrusted: true)
+        let modelManager = StubModelManager(activeModelID: nil, activeModel: nil, activeModelLocalPath: nil, needsSetup: true)
+        let runner = TranscriptionRunner(
+            modelManager: modelManager,
+            pythonWorker: StubPythonWorker(),
+            rustWorker: StubRustWorker(),
+            pythonRuntimeResolver: { (URL(fileURLWithPath: "/tmp/python"), URL(fileURLWithPath: "/tmp/transcribe.py")) },
+            parakeetWorkerResolver: { URL(fileURLWithPath: "/tmp/parakeet-worker") }
+        )
+        let updateController = StubUpdateController()
+
+        let appDelegate = AppDelegate(
+            permissionCoordinator: permissionCoordinator,
+            modelManager: modelManager,
+            transcriptionRunner: runner,
+            updateController: updateController
+        )
+
+        let menu = appDelegate.buildStatusMenu()
+        let setupAndModelItems = menu.items.filter { $0.title == "Run Setup & Select Model" }
+        XCTAssertEqual(setupAndModelItems.count, 1)
+        XCTAssertFalse(menu.items.contains { $0.title == "Select your model" })
+    }
 }

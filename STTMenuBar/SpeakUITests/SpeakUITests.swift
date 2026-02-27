@@ -12,6 +12,18 @@ final class SpeakUITests: XCTestCase {
         return app
     }
 
+    private func waitForTextContains(_ element: XCUIElement, text: String, timeout: TimeInterval = 3) {
+        let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
+    }
+
+    private func waitForValueContains(_ element: XCUIElement, text: String, timeout: TimeInterval = 3) {
+        let predicate = NSPredicate(format: "value CONTAINS %@", text)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
+    }
+
     func testSetupRendersDefaultParakeetAndAllModelOptions() {
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
@@ -23,19 +35,18 @@ final class SpeakUITests: XCTestCase {
 
         let modelPicker = app.popUpButtons["setup.modelPicker"]
         XCTAssertTrue(modelPicker.waitForExistence(timeout: 2))
-
-        let value = (modelPicker.value as? String) ?? ""
-        XCTAssertTrue(value.contains("Parakeet v3"))
+        waitForValueContains(modelPicker, text: "Parakeet v3")
 
         let description = app.staticTexts["setup.modelDescription"]
         XCTAssertTrue(description.exists)
-        XCTAssertTrue(description.label.contains("Fast, accurate transcription"))
+        waitForTextContains(description, text: "Fast")
+        waitForTextContains(description, text: "Small")
 
         modelPicker.click()
         XCTAssertTrue(app.menuItems["Parakeet v3 (Default)"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.menuItems["Small Whisper"].exists)
-        XCTAssertTrue(app.menuItems["Medium Whisper"].exists)
-        XCTAssertTrue(app.menuItems["Large Whisper v3"].exists)
+        XCTAssertTrue(app.menuItems["Small (Fastest)"].exists)
+        XCTAssertTrue(app.menuItems["Medium (Recommended)"].exists)
+        XCTAssertTrue(app.menuItems["Large v3 (Best Accuracy)"].exists)
         app.typeKey(.escape, modifierFlags: [])
     }
 
@@ -84,10 +95,8 @@ final class SpeakUITests: XCTestCase {
 
         let fallbackNotice = app.staticTexts["setup.modelStatus"]
         XCTAssertTrue(fallbackNotice.waitForExistence(timeout: 2))
-        XCTAssertTrue(fallbackNotice.label.contains("Small (Fallback)"))
-
-        let value = (modelPicker.value as? String) ?? ""
-        XCTAssertTrue(value.contains("Small"))
+        waitForTextContains(fallbackNotice, text: "Small (Fallback)", timeout: 5)
+        waitForValueContains(modelPicker, text: "Small", timeout: 5)
     }
 
     func testExistingUserLaunchDoesNotForceSetup() {

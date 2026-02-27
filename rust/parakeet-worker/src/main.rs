@@ -14,7 +14,7 @@ const PARAKEET_MODEL_ID: &str = "parakeet_tdt_0_6b_v3";
 const PARAKEET_DISPLAY_NAME: &str = "Parakeet v3 (Default)";
 const PARAKEET_SOURCE_REPO: &str = "nemo-parakeet-tdt-0.6b-v3";
 const PARAKEET_LAYOUT_VERSION: &str = "handy-v1";
-const PARAKEET_FALLBACK_BYTES: i64 = 3_220_000_000;
+const PARAKEET_FALLBACK_BYTES: i64 = 478_517_071;
 const DEFAULT_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
 
 #[derive(Debug, Clone)]
@@ -489,29 +489,64 @@ fn model_artifact_hash() -> Option<String> {
 }
 
 fn probe_remote_size_with_curl(url: &str) -> Option<i64> {
-    let output = Command::new("/usr/bin/curl")
-        .args(["-sIL", "--max-time", "20", url])
+    let head_output = Command::new("/usr/bin/curl")
+        .args(["-sIL", "--max-time", "20", "--retry", "1", url])
         .output()
         .ok()?;
 
-    if !output.status.success() {
+    if head_output.status.success() {
+        let stdout = String::from_utf8_lossy(&head_output.stdout);
+        if let Some(bytes) = parse_remote_size_from_headers(&stdout) {
+            return Some(bytes);
+        }
+    }
+
+    // Some hosts omit useful headers on HEAD; do a 1-byte range GET and read response headers.
+    let range_output = Command::new("/usr/bin/curl")
+        .args([
+            "-sL",
+            "--max-time",
+            "20",
+            "--retry",
+            "1",
+            "--range",
+            "0-0",
+            "-D",
+            "-",
+            "-o",
+            "/dev/null",
+            url,
+        ])
+        .output()
+        .ok()?;
+
+    if !range_output.status.success() {
         return None;
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout
-        .lines()
-        .filter_map(|line| {
-            let lower = line.to_ascii_lowercase();
-            if !lower.starts_with("content-length:") {
-                return None;
+    let headers = String::from_utf8_lossy(&range_output.stdout);
+    parse_remote_size_from_headers(&headers)
+}
+
+fn parse_remote_size_from_headers(headers: &str) -> Option<i64> {
+    for line in headers.lines().rev() {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("content-length:") {
+            if let Some(value) = line.split(':').nth(1).map(|value| value.trim()) {
+                if let Ok(parsed) = value.parse::<i64>() {
+                    return Some(parsed);
+                }
             }
-            line.split(':')
-                .nth(1)
-                .map(|value| value.trim())
-                .and_then(|value| value.parse::<i64>().ok())
-        })
-        .last()
+        }
+        if lower.starts_with("content-range:") {
+            if let Some(total) = line.split('/').nth(1).map(|value| value.trim()) {
+                if let Ok(parsed) = total.parse::<i64>() {
+                    return Some(parsed);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn locate_model_dir(root: &Path) -> Result<PathBuf, String> {

@@ -91,13 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem = toggle
         menu.addItem(toggle)
 
-        let setup = NSMenuItem(title: "Run Setup...", action: #selector(openSetupWizard), keyEquivalent: "")
+        let setup = NSMenuItem(title: "Run Setup & Select Model", action: #selector(openSetupWizard), keyEquivalent: "")
         setup.target = self
         menu.addItem(setup)
-
-        let modelItem = NSMenuItem(title: "Select your model", action: #selector(openModelSelection), keyEquivalent: "")
-        modelItem.target = self
-        menu.addItem(modelItem)
 
         let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForAppUpdates), keyEquivalent: "")
         checkForUpdatesItem.target = self
@@ -383,10 +379,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSetupWizard() {
-        showSetupWizard(activate: true)
-    }
-
-    @objc private func openModelSelection() {
         showSetupWizard(activate: true)
     }
 
