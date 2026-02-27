@@ -1,0 +1,9 @@
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/ort_sys-cd87dc046e7a00e8.d: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/mod.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/dirs.rs
+
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/libort_sys-cd87dc046e7a00e8.rlib: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/mod.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/dirs.rs
+
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/libort_sys-cd87dc046e7a00e8.rmeta: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/mod.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/dirs.rs
+
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/lib.rs:
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/mod.rs:
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ort-sys-2.0.0-rc.10/src/internal/dirs.rs:

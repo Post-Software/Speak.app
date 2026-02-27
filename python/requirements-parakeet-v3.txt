@@ -1,0 +1,5 @@
+# Parakeet v3 ONNX runtime dependencies (installed lazily into Application Support).
+# Provider strategy: CoreML first on macOS, CPU fallback.
+onnx-asr==0.10.2
+onnxruntime==1.20.1
+sentencepiece==0.2.0

@@ -135,6 +135,51 @@ if [ ! -f "${TRANSCRIBE_SCRIPT}" ]; then
   exit 1
 fi
 
+PARAKEET_REQ_FILE="${PY_ROOT}/requirements-parakeet-v3.txt"
+if [ ! -f "${PARAKEET_REQ_FILE}" ]; then
+  echo "Missing bundled Parakeet runtime requirements file: ${PARAKEET_REQ_FILE}"
+  exit 1
+fi
+
+PARAKEET_WORKER="${APP_PATH}/Contents/Resources/parakeet-worker"
+if [ ! -x "${PARAKEET_WORKER}" ]; then
+  echo "Missing bundled Parakeet worker executable: ${PARAKEET_WORKER}"
+  exit 1
+fi
+
+RUNTIME_CHECK_LOG="$(mktemp /tmp/speak-parakeet-runtime.XXXXXX)"
+if ! "${PARAKEET_WORKER}" --runtime-check --model-id parakeet_tdt_0_6b_v3 > "${RUNTIME_CHECK_LOG}" 2>&1; then
+  echo "Bundled Parakeet worker runtime-check failed:"
+  cat "${RUNTIME_CHECK_LOG}" | sed -n '1,200p'
+  rm -f "${RUNTIME_CHECK_LOG}"
+  exit 1
+fi
+
+if ! /usr/bin/python3 - "${RUNTIME_CHECK_LOG}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as f:
+    lines = [line.strip() for line in f if line.strip()]
+
+for line in reversed(lines):
+    try:
+        payload = json.loads(line)
+    except Exception:
+        continue
+    if payload.get("model_id") == "parakeet_tdt_0_6b_v3" and "supported" in payload and "status" in payload:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+then
+  echo "Bundled Parakeet worker runtime-check did not produce expected JSON payload:"
+  cat "${RUNTIME_CHECK_LOG}" | sed -n '1,200p'
+  rm -f "${RUNTIME_CHECK_LOG}"
+  exit 1
+fi
+rm -f "${RUNTIME_CHECK_LOG}"
+
 MODEL_INFO_LOG="$(mktemp /tmp/speak-model-info.XXXXXX)"
 if ! run_bundled_python "${PYTHON_BIN}" "${TRANSCRIBE_SCRIPT}" --model-info --model-id whisper_medium_en > "${MODEL_INFO_LOG}" 2>&1; then
   echo "Bundled model-info command failed:"
