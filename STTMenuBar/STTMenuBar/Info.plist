@@ -27,7 +27,7 @@
 	<key>SUFeedURL</key>
 	<string>https://post-software.github.io/Speak.app/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_SPARKLE_PUBLIC_ED_KEY</string>
+	<string>bofx7hCYe1MJ4lxDQP5i70DHhSLG7Nf1YoMCJtNIZVA=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 </dict>

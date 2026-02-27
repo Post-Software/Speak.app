@@ -225,6 +225,17 @@ if ! "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"; then
   "${ROOT_DIR}/scripts/patch_bundled_python_refs.sh" "${APP_PATH}"
   "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"
 fi
+
+prune_python_build_artifacts() {
+  local app_path="$1"
+  local py_root="${app_path}/Contents/Resources/python"
+  [ -d "${py_root}" ] || return 0
+
+  # Remove build-only Python artifacts that are not required at runtime and can fail notarization.
+  find "${py_root}" -type d -name "config-*-darwin" -prune -exec rm -rf {} +
+}
+
+prune_python_build_artifacts "${APP_PATH}"
 echo "Model weights are not bundled. End users download a model on first launch."
 
 sign_python_executables_with_runtime() {
@@ -270,6 +281,9 @@ sign_python_framework_bundles_with_runtime "${APP_PATH}" "${DEVELOPER_ID_APP_CER
 sign_parakeet_worker_with_runtime "${APP_PATH}" "${DEVELOPER_ID_APP_CERT}"
 echo "Re-signing exported app bundle for nested Python Mach-O consistency..."
 codesign --force --options runtime --timestamp --entitlements "${APP_ENTITLEMENTS_PATH}" --sign "${DEVELOPER_ID_APP_CERT}" "${APP_PATH}"
+# Sparkle framework copies can carry Finder metadata that invalidates deep verification.
+# Strip xattrs from the exported app prior to verify/notarization.
+xattr -cr "${APP_PATH}"
 
 if ! codesign --verify --deep --strict --verbose=2 "${APP_PATH}"; then
   echo "Code signature verification failed for ${APP_PATH}"
