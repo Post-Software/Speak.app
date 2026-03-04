@@ -437,6 +437,11 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"/usr/lib/swift",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;
@@ -458,6 +463,11 @@
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"/usr/lib/swift",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;

@@ -9,13 +9,13 @@
     <language>en</language>
     <item>
       <title>Speak 0.2</title>
-      <pubDate>Fri, 27 Feb 2026 18:06:08 +0000</pubDate>
+      <pubDate>Wed, 04 Mar 2026 15:48:44 +0000</pubDate>
       <enclosure url="https://github.com/Post-Software/Speak.app/releases/download/v0.2/Speak-0.2.zip"
                  sparkle:version="4"
                  sparkle:shortVersionString="0.2"
-                 length="148755951"
+                 length="148760270"
                  type="application/octet-stream"
-                 sparkle:edSignature="WUApJQqi0S+P2Vuh+gu5TaNHuQFXX+k87SDFiU/wBJhncM5tOFTVerjDmgoppyd1yP/glbPURApfTvwLh4G+Bg==" />
+                 sparkle:edSignature="8vclSE779luhchBj/tt+/HAKVjZ7HO4mn0LIykVKcJHAreEiJq9uWgFMaDJ+gDwAEj33tYHgbyMt/RRPdf6NBg==" />
     </item>
   </channel>
 </rss>

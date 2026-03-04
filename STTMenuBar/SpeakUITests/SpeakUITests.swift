@@ -44,9 +44,9 @@ final class SpeakUITests: XCTestCase {
 
         modelPicker.click()
         XCTAssertTrue(app.menuItems["Parakeet v3 (Default)"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.menuItems["Small (Fastest)"].exists)
-        XCTAssertTrue(app.menuItems["Medium (Recommended)"].exists)
-        XCTAssertTrue(app.menuItems["Large v3 (Best Accuracy)"].exists)
+        XCTAssertTrue(app.menuItems["Faster Whisper Small"].exists)
+        XCTAssertTrue(app.menuItems["Faster Whisper Medium"].exists)
+        XCTAssertTrue(app.menuItems["Faster Whisper Large"].exists)
         app.typeKey(.escape, modifierFlags: [])
     }
 

@@ -26,8 +26,8 @@ enum ModelCatalog {
 
     static let smallEN = ModelVariant(
         id: "whisper_small_en",
-        displayName: "Small (Fastest)",
-        plainDescription: "Smallest download and fastest setup. Best fallback choice, with lower accuracy.",
+        displayName: "Faster Whisper Small",
+        plainDescription: "Smallest download and quickest setup. Best fallback choice, with lower accuracy.",
         isRecommended: false,
         sourceRepo: "Systran/faster-whisper-small.en",
         engine: .whisper
@@ -35,7 +35,7 @@ enum ModelCatalog {
 
     static let mediumEN = ModelVariant(
         id: "whisper_medium_en",
-        displayName: "Medium (Recommended)",
+        displayName: "Faster Whisper Medium",
         plainDescription: "Balanced speed and accuracy with a moderate download size.",
         isRecommended: true,
         sourceRepo: "Systran/faster-whisper-medium.en",
@@ -44,7 +44,7 @@ enum ModelCatalog {
 
     static let largeV3 = ModelVariant(
         id: "whisper_large_v3",
-        displayName: "Large v3 (Best Accuracy)",
+        displayName: "Faster Whisper Large",
         plainDescription: "Highest accuracy, largest download, and slower performance.",
         isRecommended: false,
         sourceRepo: "Systran/faster-whisper-large-v3",

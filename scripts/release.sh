@@ -201,6 +201,15 @@ verify_mic_usage_description() {
   fi
 }
 
+verify_sparkle_runpath() {
+  local app_binary="$1"
+  if ! /usr/bin/otool -l "${app_binary}" | grep -A2 "LC_RPATH" | grep -q "@executable_path/../Frameworks"; then
+    echo "Missing @executable_path/../Frameworks runpath on ${app_binary}"
+    echo "The app will fail to launch if Sparkle.framework cannot be resolved at runtime."
+    exit 1
+  fi
+}
+
 has_mic_entitlement() {
   local app_binary="$1"
   local tmp_ent
@@ -219,6 +228,7 @@ has_mic_entitlement() {
 
 extract_app_entitlements "${APP_BINARY_PATH}" "${APP_ENTITLEMENTS_PATH}"
 verify_mic_usage_description "${APP_INFO_PATH}"
+verify_sparkle_runpath "${APP_BINARY_PATH}"
 
 if ! "${ROOT_DIR}/scripts/verify_bundled_python.sh" "${APP_PATH}"; then
   echo "Bundled Python verification failed after export. Applying fallback relink pass..."

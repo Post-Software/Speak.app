@@ -21,9 +21,9 @@ Step 1: Permissions
 
 Step 2: Model download
 - `Parakeet v3 (Default)` -> `nemo-parakeet-tdt-0.6b-v3` (Rust worker with Handy-compatible ONNX artifacts)
-- `Small (Fastest)` → `Systran/faster-whisper-small.en`
-- `Medium (Recommended)` → `Systran/faster-whisper-medium.en`
-- `Large v3 (Best Accuracy)` → `Systran/faster-whisper-large-v3`
+- `Faster Whisper Small` → `Systran/faster-whisper-small.en`
+- `Faster Whisper Medium` → `Systran/faster-whisper-medium.en`
+- `Faster Whisper Large` → `Systran/faster-whisper-large-v3`
 
 Speak fetches exact download size at runtime before consent.
 Parakeet setup keeps the selection when runtime is installable and only auto-switches to Small on hard unsupported runtime.

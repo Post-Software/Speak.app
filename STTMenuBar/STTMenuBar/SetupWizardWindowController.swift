@@ -302,8 +302,8 @@ final class SetupWizardWindowController: NSWindowController {
     private func updateModelDescriptionAndButtonLabel() {
         let variant = selectedVariant
         modelDescriptionLabel.stringValue = variant.plainDescription
-        if variant.isRecommended {
-            downloadButton.title = "Download Recommended"
+        if variant.id == ModelCatalog.defaultModelID {
+            downloadButton.title = "Download Default"
         } else {
             downloadButton.title = "Download & Activate"
         }
