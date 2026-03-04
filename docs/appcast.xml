@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Speak Updates</title>
+    <link>https://post-software.github.io/Speak.app/appcast.xml</link>
+    <description>Speak macOS release feed</description>
+    <language>en</language>
+    <item>
+      <title>Speak 0.2</title>
+      <pubDate>Wed, 04 Mar 2026 15:48:44 +0000</pubDate>
+      <enclosure url="https://github.com/Post-Software/Speak.app/releases/download/v0.2/Speak-0.2.zip"
+                 sparkle:version="4"
+                 sparkle:shortVersionString="0.2"
+                 length="148760270"
+                 type="application/octet-stream"
+                 sparkle:edSignature="8vclSE779luhchBj/tt+/HAKVjZ7HO4mn0LIykVKcJHAreEiJq9uWgFMaDJ+gDwAEj33tYHgbyMt/RRPdf6NBg==" />
+    </item>
+  </channel>
+</rss>

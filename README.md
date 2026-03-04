@@ -1,6 +1,6 @@
 # Speak (macOS, Offline Speech-to-Text)
 
-Speak is a menu bar app for macOS that records your voice, transcribes it locally with `faster-whisper`, and inserts text into the focused app.
+Speak is a menu bar app for macOS that records your voice, transcribes it locally, and inserts text into the focused app.
 
 ## What It Does
 - Menu bar app (`LSUIElement`, no Dock icon).
@@ -20,11 +20,13 @@ Step 1: Permissions
 - Accessibility (required for hotkey + auto-paste)
 
 Step 2: Model download
-- `Small (Fastest)` → `Systran/faster-whisper-small.en`
-- `Medium (Recommended)` → `Systran/faster-whisper-medium.en`
-- `Large v3 (Best Accuracy)` → `Systran/faster-whisper-large-v3`
+- `Parakeet v3 (Default)` -> `nemo-parakeet-tdt-0.6b-v3` (Rust worker with Handy-compatible ONNX artifacts)
+- `Faster Whisper Small` → `Systran/faster-whisper-small.en`
+- `Faster Whisper Medium` → `Systran/faster-whisper-medium.en`
+- `Faster Whisper Large` → `Systran/faster-whisper-large-v3`
 
 Speak fetches exact download size at runtime before consent.
+Parakeet setup keeps the selection when runtime is installable and only auto-switches to Small on hard unsupported runtime.
 
 ## Model Storage and Switching
 - Models are stored in:
@@ -37,9 +39,16 @@ Speak fetches exact download size at runtime before consent.
 ## Offline First Launch Behavior
 If no internet is available during first-run setup, model setup remains blocked and recording stays disabled until download succeeds.
 
+## Runtime Notes
+- Whisper models use bundled runtime dependencies from `python/.venv`.
+- Parakeet v3 uses a bundled Rust worker (`parakeet-worker`) and Handy-compatible model layout.
+- Parakeet v3 is optimized for Apple Silicon in this release; unsupported runtimes fall back to Small Whisper in setup.
+- Parakeet model artifacts are downloaded from the configured tarball source (default: `https://blob.handy.computer/parakeet-v3-int8.tar.gz`).
+
 ## Repository Layout
 - `STTMenuBar/` — Xcode project + Swift AppKit app.
 - `python/transcribe.py` — Python transcription worker + model management commands.
+- `rust/parakeet-worker/` — Rust Parakeet runtime/model worker.
 - `python/requirements.txt` — Python dependencies.
 
 ## Local Build
@@ -62,10 +71,71 @@ Install Node dependencies before running release scripts:
 npm ci
 ```
 
+## In-App Updates
+- Speak uses Sparkle 2 for in-app update checks and install prompts.
+- Feed URL: `https://post-software.github.io/Speak.app/appcast.xml`
+- First install still uses DMG. Subsequent updates are delivered in-app from signed ZIP archives.
+- In-app updates do not require manually dragging a new app from DMG each time.
+- Current update strategy is full ZIP archives (delta/binary patch updates are not enabled yet).
+
+## Pre-Merge Release Gate
+Run all automated checks before merging:
+
+```bash
+xcodebuild test -project STTMenuBar/STTMenuBar.xcodeproj -scheme STTMenuBar -destination 'platform=macOS'
+cargo test --manifest-path rust/parakeet-worker/Cargo.toml
+python3 -m py_compile python/transcribe.py
+scripts/release.sh
+```
+
+Required results:
+- Swift unit/UI tests pass.
+- Rust worker tests pass.
+- Python syntax check passes.
+- Release pipeline completes with notarization accepted and DMG stapled.
+
+Manual checks before sharing builds:
+- Fresh install flow: permissions -> model install -> transcription -> paste.
+- Whisper regression: Small/Medium/Large install and switching still work.
+- Error routing: transient failures do not reopen setup, setup-recoverable failures do.
+- Audio stress: repeated recordings under moderate load with no persistent failures.
+- Sparkle update flow: old build updates in-app successfully.
+- No-update flow: clean up-to-date response.
+
+Console warning triage policy:
+- Non-blocking: Sparkle gentle-reminder warning, AddInstanceForFactory noise, Reporter disconnected, task-name-port warning.
+- Watchlist: `HALC_ProxyIOContext ... skipping cycle due to overload` (treat as blocker only if reproducible audio/transcription degradation appears in normal usage).
+
+### Sparkle Key Management
+- `SUPublicEDKey` lives in `Info.plist`.
+- Sparkle private key must not be committed.
+- Set private key path at release time with `SPARKLE_PRIVATE_KEY_PATH=/secure/path/to/sparkle_private_key`.
+
+### Release Script
+- Canonical release command: `scripts/release.sh`
+- Compatibility wrappers remain available:
+  - `scripts/release_0_1_2.sh`
+  - `scripts/release_0_1_3.sh`
+  - `scripts/release_0_1_4.sh`
+
+### Release Output
+`scripts/release.sh` now produces:
+- Signed/notarized DMG
+- Sparkle update ZIP (`dist/<version>/Speak-<version>.zip`)
+- Sparkle signature output (`dist/<version>/sparkle-signature.txt`)
+- Sparkle appcast XML (`dist/<version>/appcast.xml`)
+- Updated canonical feed file (`docs/appcast.xml`)
+
+### Branch Feed Testing
+- GitHub Pages source can be pointed to a feature branch for pre-merge update testing (for example `codex/parakeet-v0.2` at `/docs`).
+- Before merging to `master`, ensure `docs/appcast.xml` exists on `master` and switch Pages source back to `master/docs`.
+
 ## How Bundling Works
 Xcode build phase copies into app resources:
 - `python/.venv` -> `Speak.app/Contents/Resources/python`
 - `python/transcribe.py` -> `Speak.app/Contents/Resources/python/transcribe.py`
+- `python/requirements-parakeet-v3.txt` -> `Speak.app/Contents/Resources/python/requirements-parakeet-v3.txt`
+- `rust/parakeet-worker` -> `Speak.app/Contents/Resources/parakeet-worker`
 
 Model weights are not bundled in the app; they are downloaded during setup.
 

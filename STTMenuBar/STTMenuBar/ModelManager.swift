@@ -1,12 +1,15 @@
 import Foundation
 
-final class ModelManager {
+final class ModelManager: ModelManaging {
     static let shared = ModelManager()
 
     struct InstalledModel: Codable, Equatable {
         let id: String
         let sourceRepo: String
         let installedAt: Date
+        let modelSourceURL: String?
+        let modelArtifactHash: String?
+        let modelLayoutVersion: String?
     }
 
     struct Manifest: Codable {
@@ -18,6 +21,7 @@ final class ModelManager {
     enum ManagerError: LocalizedError {
         case appSupportUnavailable
         case runtimeMissing
+        case parakeetWorkerMissing
         case invalidModel
         case commandFailed(String)
         case modelVerificationFailed(String)
@@ -28,6 +32,8 @@ final class ModelManager {
                 return "Could not resolve Application Support directory."
             case .runtimeMissing:
                 return "Bundled Python runtime is missing from Speak.app. Reinstall Speak and try again."
+            case .parakeetWorkerMissing:
+                return "Bundled Parakeet worker is missing from Speak.app. Reinstall Speak and try again."
             case .invalidModel:
                 return "Invalid model selection."
             case .commandFailed(let message):
@@ -40,6 +46,7 @@ final class ModelManager {
 
     private let queue = DispatchQueue(label: "speak.model.manager", qos: .userInitiated)
     private let settings = Settings.shared
+    private let environment: [String: String]
 
     private(set) var manifest = Manifest(
         activeModelID: nil,
@@ -47,19 +54,35 @@ final class ModelManager {
         lastKnownModelSizes: [:]
     )
 
-    private init() {
+    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        self.environment = environment
         loadManifest()
     }
 
-    var modelsRootURL: URL {
-        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support/Speak/models", isDirectory: true)
+    private var speakSupportURL: URL {
+        if let override = environment["SPEAK_TEST_APP_SUPPORT_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
         }
-        return appSupport.appendingPathComponent("Speak/models", isDirectory: true)
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support/Speak", isDirectory: true)
+        }
+        return appSupport.appendingPathComponent("Speak", isDirectory: true)
+    }
+
+    var modelsRootURL: URL {
+        speakSupportURL.appendingPathComponent("models", isDirectory: true)
+    }
+
+    var runtimeRootURL: URL {
+        speakSupportURL.appendingPathComponent("runtime", isDirectory: true)
     }
 
     var manifestURL: URL {
         modelsRootURL.appendingPathComponent("manifest.json")
+    }
+
+    private var uiTestMode: Bool {
+        environment["SPEAK_UI_TEST_MODE"] == "1"
     }
 
     var activeModel: ModelVariant? {
@@ -77,23 +100,84 @@ final class ModelManager {
         modelsRootURL.appendingPathComponent(modelID, isDirectory: true)
     }
 
+    func runtimeSitePackagesURL(for modelID: String) -> URL? {
+        guard let model = ModelCatalog.model(for: modelID) else { return nil }
+        switch model.engine {
+        case .whisper:
+            return nil
+        case .parakeetTDTV3:
+            return runtimeRootURL
+                .appendingPathComponent("parakeet-v3", isDirectory: true)
+                .appendingPathComponent("site-packages", isDirectory: true)
+        }
+    }
+
+    func additionalPythonPaths(for modelID: String) -> [String] {
+        guard let sitePackages = runtimeSitePackagesURL(for: modelID) else { return [] }
+        return [sitePackages.path]
+    }
+
     func isInstalled(modelID: String) -> Bool {
         FileManager.default.fileExists(atPath: modelDirectory(for: modelID).path)
     }
 
     func needsSetup() -> Bool {
+        if uiTestMode {
+            if let forced = environment["SPEAK_UI_FORCE_NEEDS_SETUP"] {
+                return forced != "0"
+            }
+        }
+
         guard settings.modelSetupCompleted else { return true }
         guard let activeModelID = manifest.activeModelID else { return true }
         return !isInstalled(modelID: activeModelID)
     }
 
-    func fetchRemoteInfo(for variant: ModelVariant, completion: @escaping (Result<RemoteModelInfo, Error>) -> Void) {
+    func checkRuntime(for variant: ModelVariant, completion: @escaping (Result<RuntimeSupportInfo, Error>) -> Void) {
         queue.async {
             do {
-                let lines = try self.runPythonCommand(arguments: [
-                    "--model-info",
-                    "--model-id", variant.id
-                ])
+                let runtimeInfo = try self.runtimeSupportInfo(for: variant)
+                DispatchQueue.main.async {
+                    completion(.success(runtimeInfo))
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func fetchRemoteInfo(for variant: ModelVariant, completion: @escaping (Result<RemoteModelInfo, Error>) -> Void) {
+        queue.async {
+            if let uiInfo = self.uiTestRemoteInfo(for: variant) {
+                DispatchQueue.main.async {
+                    self.manifest.lastKnownModelSizes[uiInfo.id] = uiInfo.downloadBytes
+                    self.persistManifest()
+                    self.syncSettingsFromManifest()
+                    completion(.success(uiInfo))
+                }
+                return
+            }
+
+            do {
+                let lines: [String]
+                if variant.engine == .parakeetTDTV3 {
+                    lines = try self.runParakeetCommand(
+                        arguments: [
+                            "--model-info",
+                            "--model-id", variant.id
+                        ]
+                    )
+                } else {
+                    lines = try self.runPythonCommand(
+                        arguments: [
+                            "--model-info",
+                            "--model-id", variant.id
+                        ],
+                        additionalPythonPaths: self.additionalPythonPaths(for: variant.id)
+                    )
+                }
 
                 guard let payload = self.lastJSONPayload(from: lines),
                       let id = payload["id"] as? String,
@@ -130,22 +214,100 @@ final class ModelManager {
     func installModel(variant: ModelVariant, completion: @escaping (Result<Void, Error>) -> Void) {
         let oldActiveModelID = self.manifest.activeModelID
         queue.async {
+            if self.uiTestMode {
+                let shouldFail = self.environment["SPEAK_UI_INSTALL_RESULT"]?.lowercased() == "fail"
+                DispatchQueue.main.async {
+                    if shouldFail {
+                        completion(.failure(ManagerError.commandFailed("UI test requested install failure.")))
+                        return
+                    }
+
+                    self.manifest.activeModelID = variant.id
+                    self.manifest.installed = [
+                        InstalledModel(
+                            id: variant.id,
+                            sourceRepo: variant.sourceRepo,
+                            installedAt: Date(),
+                            modelSourceURL: nil,
+                            modelArtifactHash: nil,
+                            modelLayoutVersion: nil
+                        )
+                    ]
+                    self.persistManifest()
+                    self.syncSettingsFromManifest()
+                    completion(.success(()))
+                }
+                return
+            }
+
             let stagingRoot = self.modelsRootURL
                 .appendingPathComponent(".staging", isDirectory: true)
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
 
             do {
                 try self.ensureStorageRoot()
+                try self.ensureRuntimeRoot()
                 try FileManager.default.createDirectory(at: stagingRoot, withIntermediateDirectories: true)
 
-                _ = try self.runPythonCommand(arguments: [
-                    "--download-model",
-                    "--model-id", variant.id,
-                    "--dest", stagingRoot.path
-                ])
+                var installedModelSourceURL: String?
+                var installedModelArtifactHash: String?
+                var installedModelLayoutVersion: String?
+
+                if variant.engine == .parakeetTDTV3 {
+                    let runtimeStatus = try self.runtimeSupportInfo(for: variant)
+                    if runtimeStatus.isHardUnsupported {
+                        let message = runtimeStatus.reason.isEmpty
+                            ? "Parakeet v3 runtime is not supported on this machine."
+                            : runtimeStatus.reason
+                        throw ManagerError.commandFailed(message)
+                    }
+
+                    let downloadLines = try self.runParakeetCommand(
+                        arguments: [
+                            "--download-model",
+                            "--model-id", variant.id,
+                            "--dest", stagingRoot.path
+                        ]
+                    )
+
+                    guard let downloadPayload = self.lastJSONPayload(from: downloadLines),
+                          (downloadPayload["ok"] as? Bool) == true else {
+                        throw ManagerError.commandFailed("Failed to download Parakeet v3 model.")
+                    }
+
+                    installedModelSourceURL = downloadPayload["source_url"] as? String
+                    installedModelArtifactHash = downloadPayload["artifact_hash"] as? String
+                    installedModelLayoutVersion = downloadPayload["layout_version"] as? String
+                } else {
+                    _ = try self.runPythonCommand(
+                        arguments: [
+                            "--download-model",
+                            "--model-id", variant.id,
+                            "--dest", stagingRoot.path
+                        ],
+                        additionalPythonPaths: self.additionalPythonPaths(for: variant.id)
+                    )
+                }
 
                 let downloadedModelDir = stagingRoot.appendingPathComponent(variant.id, isDirectory: true)
-                try self.verifyModelDirectory(downloadedModelDir)
+                if variant.engine == .parakeetTDTV3 {
+                    _ = try self.runParakeetCommand(
+                        arguments: [
+                            "--verify-model",
+                            "--model-id", variant.id,
+                            "--model-path", downloadedModelDir.path
+                        ]
+                    )
+                } else {
+                    _ = try self.runPythonCommand(
+                        arguments: [
+                            "--verify-model",
+                            "--model-id", variant.id,
+                            "--model-path", downloadedModelDir.path
+                        ],
+                        additionalPythonPaths: self.additionalPythonPaths(for: variant.id)
+                    )
+                }
 
                 let finalModelDir = self.modelDirectory(for: variant.id)
                 if FileManager.default.fileExists(atPath: finalModelDir.path) {
@@ -166,7 +328,14 @@ final class ModelManager {
                 DispatchQueue.main.async {
                     self.manifest.activeModelID = variant.id
                     self.manifest.installed = [
-                        InstalledModel(id: variant.id, sourceRepo: variant.sourceRepo, installedAt: Date())
+                        InstalledModel(
+                            id: variant.id,
+                            sourceRepo: variant.sourceRepo,
+                            installedAt: Date(),
+                            modelSourceURL: installedModelSourceURL,
+                            modelArtifactHash: installedModelArtifactHash,
+                            modelLayoutVersion: installedModelLayoutVersion
+                        )
                     ]
                     self.persistManifest()
                     self.syncSettingsFromManifest()
@@ -222,6 +391,10 @@ final class ModelManager {
         try FileManager.default.createDirectory(at: modelsRootURL, withIntermediateDirectories: true)
     }
 
+    private func ensureRuntimeRoot() throws {
+        try FileManager.default.createDirectory(at: runtimeRootURL, withIntermediateDirectories: true)
+    }
+
     private func persistManifest() {
         do {
             try ensureStorageRoot()
@@ -235,14 +408,95 @@ final class ModelManager {
         }
     }
 
-    private func verifyModelDirectory(_ url: URL) throws {
-        let required = ["model.bin", "config.json", "tokenizer.json"]
-        for name in required {
-            let path = url.appendingPathComponent(name).path
-            if !FileManager.default.fileExists(atPath: path) {
-                throw ManagerError.modelVerificationFailed("Downloaded model is incomplete (missing \(name)).")
-            }
+    private func runtimeSupportInfo(for variant: ModelVariant) throws -> RuntimeSupportInfo {
+        if let override = uiTestRuntimeSupportInfo(for: variant) {
+            return override
         }
+
+        let lines: [String]
+        if variant.engine == .parakeetTDTV3 {
+            lines = try runParakeetCommand(
+                arguments: [
+                    "--runtime-check",
+                    "--model-id", variant.id
+                ]
+            )
+        } else {
+            lines = try runPythonCommand(
+                arguments: [
+                    "--runtime-check",
+                    "--model-id", variant.id
+                ],
+                additionalPythonPaths: additionalPythonPaths(for: variant.id)
+            )
+        }
+
+        guard let payload = lastJSONPayload(from: lines) else {
+            throw ManagerError.commandFailed("Could not parse runtime check response.")
+        }
+
+        return Self.runtimeSupportInfo(from: payload, fallbackModelID: variant.id)
+    }
+
+    private func uiTestRuntimeSupportInfo(for variant: ModelVariant) -> RuntimeSupportInfo? {
+        guard uiTestMode else { return nil }
+
+        if variant.engine == .whisper {
+            return RuntimeSupportInfo(
+                modelID: variant.id,
+                supported: true,
+                status: "ok",
+                reason: "",
+                requiresInstall: false
+            )
+        }
+
+        let status = environment["SPEAK_UI_RUNTIME_STATUS"]?.lowercased() ?? "ok"
+        switch status {
+        case "unsupported":
+            return RuntimeSupportInfo(
+                modelID: variant.id,
+                supported: false,
+                status: "unsupported",
+                reason: "Parakeet is not supported on this machine.",
+                requiresInstall: false
+            )
+        case "missing_runtime":
+            return RuntimeSupportInfo(
+                modelID: variant.id,
+                supported: false,
+                status: "missing_runtime",
+                reason: "Parakeet runtime components will be installed during setup.",
+                requiresInstall: true
+            )
+        default:
+            return RuntimeSupportInfo(
+                modelID: variant.id,
+                supported: true,
+                status: "ok",
+                reason: "",
+                requiresInstall: false
+            )
+        }
+    }
+
+    private func uiTestRemoteInfo(for variant: ModelVariant) -> RemoteModelInfo? {
+        guard uiTestMode else { return nil }
+
+        let sizeByModelID: [String: Int64] = [
+            ModelCatalog.parakeetTdtV3.id: 478_517_071,
+            ModelCatalog.smallEN.id: 490_000_000,
+            ModelCatalog.mediumEN.id: 1_530_000_000,
+            ModelCatalog.largeV3.id: 3_080_000_000
+        ]
+
+        return RemoteModelInfo(
+            id: variant.id,
+            repo: variant.sourceRepo,
+            displayName: variant.displayName,
+            downloadBytes: sizeByModelID[variant.id] ?? 500_000_000,
+            sizeSource: .fallback
+        )
     }
 
     private func resolvePythonRuntime() throws -> (pythonURL: URL, scriptURL: URL) {
@@ -268,13 +522,51 @@ final class ModelManager {
         throw ManagerError.runtimeMissing
     }
 
-    private func runPythonCommand(arguments: [String]) throws -> [String] {
+    private func resolveParakeetWorker() throws -> URL {
+        if let resourcesURL = Bundle.main.resourceURL {
+            let bundledWorker = resourcesURL.appendingPathComponent("parakeet-worker")
+            if FileManager.default.isExecutableFile(atPath: bundledWorker.path) {
+                return bundledWorker
+            }
+        }
+
+        #if DEBUG
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let debugWorker = cwd
+            .appendingPathComponent("rust/parakeet-worker/target/release/parakeet-worker")
+        if FileManager.default.isExecutableFile(atPath: debugWorker.path) {
+            return debugWorker
+        }
+
+        let altWorker = cwd
+            .appendingPathComponent("rust/target/parakeet-worker/release/parakeet-worker")
+        if FileManager.default.isExecutableFile(atPath: altWorker.path) {
+            return altWorker
+        }
+        #endif
+
+        throw ManagerError.parakeetWorkerMissing
+    }
+
+    private func runPythonCommand(arguments: [String], additionalPythonPaths: [String] = []) throws -> [String] {
         let runtime = try resolvePythonRuntime()
+        let fileManager = FileManager.default
 
         let process = Process()
         process.executableURL = runtime.pythonURL
         process.arguments = [runtime.scriptURL.path] + arguments
-        process.environment = PythonRuntimeEnvironment.makeEnvironment(for: runtime.pythonURL)
+        process.environment = PythonRuntimeEnvironment.makeEnvironment(
+            for: runtime.pythonURL,
+            additionalPythonPaths: additionalPythonPaths
+        )
+        let fallbackCWD = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: speakSupportURL, withIntermediateDirectories: true)
+            process.currentDirectoryURL = speakSupportURL
+        } catch {
+            NSLog("ModelManager: failed to create working directory %@ (%@)", speakSupportURL.path, error.localizedDescription)
+            process.currentDirectoryURL = fallbackCWD
+        }
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -292,12 +584,52 @@ final class ModelManager {
 
         guard process.terminationStatus == 0 else {
             let message = stderrString.isEmpty ? stdoutString : stderrString
-            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = compactCommandFailureMessage(message)
             if trimmed.contains("dlopen(/Library/Frameworks/Python.framework") {
                 NSLog("ModelManager: detected invalid bundled Python path resolution: %@", trimmed)
                 throw ManagerError.commandFailed("Bundled Python runtime path is invalid. Reinstall Speak or rebuild release package.")
             }
             throw ManagerError.commandFailed(trimmed)
+        }
+
+        return stdoutString
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+    }
+
+    private func runParakeetCommand(arguments: [String]) throws -> [String] {
+        let workerURL = try resolveParakeetWorker()
+        let fileManager = FileManager.default
+
+        let process = Process()
+        process.executableURL = workerURL
+        process.arguments = arguments
+        let fallbackCWD = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: speakSupportURL, withIntermediateDirectories: true)
+            process.currentDirectoryURL = speakSupportURL
+        } catch {
+            NSLog("ModelManager: failed to create working directory %@ (%@)", speakSupportURL.path, error.localizedDescription)
+            process.currentDirectoryURL = fallbackCWD
+        }
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+        let stdoutString = String(data: stdoutData, encoding: .utf8) ?? ""
+        let stderrString = String(data: stderrData, encoding: .utf8) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            let message = stderrString.isEmpty ? stdoutString : stderrString
+            throw ManagerError.commandFailed(compactCommandFailureMessage(message))
         }
 
         return stdoutString
@@ -314,5 +646,56 @@ final class ModelManager {
             return obj
         }
         return nil
+    }
+
+    private func compactCommandFailureMessage(_ raw: String) -> String {
+        Self.compactCommandFailureMessage(raw)
+    }
+
+    static func compactCommandFailureMessage(_ raw: String) -> String {
+        let ansiPattern = #"\u{001B}\[[0-9;]*[A-Za-z]"#
+        let withoutANSI = raw.replacingOccurrences(
+            of: ansiPattern,
+            with: "",
+            options: .regularExpression
+        )
+
+        let cleanedLines = withoutANSI
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { line in
+                guard !line.isEmpty else { return false }
+                if line.hasPrefix("Fetching ") { return false }
+                if line.hasPrefix("|") { return false }
+                if line.hasPrefix("Warning:") { return false }
+                if line.contains("UserWarning:") { return false }
+                if line.contains("local_dir_use_symlinks") { return false }
+                if line.contains("huggingface_hub/utils/_validators.py") { return false }
+                if line.contains("HF Hub") && line.contains("HF_TOKEN") { return false }
+                return true
+            }
+
+        if cleanedLines.isEmpty {
+            return withoutANSI.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let summary = cleanedLines.suffix(4).joined(separator: " | ")
+        return summary
+    }
+
+    static func runtimeSupportInfo(from payload: [String: Any], fallbackModelID: String) -> RuntimeSupportInfo {
+        let modelID = payload["model_id"] as? String ?? fallbackModelID
+        let supported = payload["supported"] as? Bool ?? false
+        let status = payload["status"] as? String ?? "unknown"
+        let reason = payload["reason"] as? String ?? ""
+        let requiresInstall = payload["requires_install"] as? Bool ?? false
+
+        return RuntimeSupportInfo(
+            modelID: modelID,
+            supported: supported,
+            status: status,
+            reason: reason,
+            requiresInstall: requiresInstall
+        )
     }
 }

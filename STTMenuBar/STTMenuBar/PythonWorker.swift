@@ -1,6 +1,6 @@
 import Foundation
 
-final class PythonWorker {
+final class PythonWorker: PythonWorkerServing {
     private let queue = DispatchQueue(label: "speak.python.worker")
     private var process: Process?
     private var stdinHandle: FileHandle?
@@ -17,7 +17,16 @@ final class PythonWorker {
         }
     }
 
-    func transcribe(pythonURL: URL, scriptURL: URL, modelPath: String, audioPath: String, computeType: String, completion: @escaping (Result<String, Error>) -> Void) {
+    func transcribe(
+        pythonURL: URL,
+        scriptURL: URL,
+        modelID: String,
+        modelPath: String,
+        audioPath: String,
+        computeType: String,
+        additionalPythonPaths: [String],
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
         queue.async {
             if self.currentCompletion != nil {
                 self.stopOnQueue(clearCompletion: true)
@@ -25,7 +34,14 @@ final class PythonWorker {
 
             if self.process?.isRunning != true {
                 do {
-                    try self.startWorker(pythonURL: pythonURL, scriptURL: scriptURL, modelPath: modelPath, computeType: computeType)
+                    try self.startWorker(
+                        pythonURL: pythonURL,
+                        scriptURL: scriptURL,
+                        modelID: modelID,
+                        modelPath: modelPath,
+                        computeType: computeType,
+                        additionalPythonPaths: additionalPythonPaths
+                    )
                 } catch {
                     completion(.failure(error))
                     return
@@ -38,23 +54,45 @@ final class PythonWorker {
         }
     }
 
-    func prewarm(pythonURL: URL, scriptURL: URL, modelPath: String, computeType: String) {
+    func prewarm(
+        pythonURL: URL,
+        scriptURL: URL,
+        modelID: String,
+        modelPath: String,
+        computeType: String,
+        additionalPythonPaths: [String]
+    ) {
         queue.async {
             if self.process?.isRunning == true { return }
             do {
-                try self.startWorker(pythonURL: pythonURL, scriptURL: scriptURL, modelPath: modelPath, computeType: computeType)
+                try self.startWorker(
+                    pythonURL: pythonURL,
+                    scriptURL: scriptURL,
+                    modelID: modelID,
+                    modelPath: modelPath,
+                    computeType: computeType,
+                    additionalPythonPaths: additionalPythonPaths
+                )
             } catch {
                 // Ignore prewarm failures; transcription will surface errors later.
             }
         }
     }
 
-    private func startWorker(pythonURL: URL, scriptURL: URL, modelPath: String, computeType: String) throws {
+    private func startWorker(
+        pythonURL: URL,
+        scriptURL: URL,
+        modelID: String,
+        modelPath: String,
+        computeType: String,
+        additionalPythonPaths: [String]
+    ) throws {
         let newProcess = Process()
         newProcess.executableURL = pythonURL
         newProcess.arguments = [
             scriptURL.path,
             "--worker",
+            "--model-id", modelID,
             "--model", modelPath,
             "--language", "en",
             "--beam-size", "1",
@@ -63,7 +101,10 @@ final class PythonWorker {
             "--local-only"
         ]
         newProcess.currentDirectoryURL = Bundle.main.resourceURL
-        newProcess.environment = PythonRuntimeEnvironment.makeEnvironment(for: pythonURL)
+        newProcess.environment = PythonRuntimeEnvironment.makeEnvironment(
+            for: pythonURL,
+            additionalPythonPaths: additionalPythonPaths
+        )
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -102,7 +143,12 @@ final class PythonWorker {
         self.stderrHandle = stderrPipe.fileHandleForReading
         self.buffer.removeAll()
         self.lastStderr = ""
-        NSLog("PythonWorker: started pid=%d modelPath=%@", newProcess.processIdentifier, modelPath)
+        NSLog(
+            "PythonWorker: started pid=%d modelID=%@ modelPath=%@",
+            newProcess.processIdentifier,
+            modelID,
+            modelPath
+        )
     }
 
     private func sendRequestOnQueue(audioPath: String) {

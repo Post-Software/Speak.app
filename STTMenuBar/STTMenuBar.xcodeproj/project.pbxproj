@@ -24,7 +24,35 @@
 		A1A1A1A10000000100000022 /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000023 /* ModelCatalog.swift */; };
 		A1A1A1A10000000100000024 /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000025 /* ModelManager.swift */; };
 		A1A1A1A10000000100000026 /* SetupWizardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A10000000100000027 /* SetupWizardWindowController.swift */; };
+		A1A1A1A1000000010000002A /* ModelManaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1000000010000002B /* ModelManaging.swift */; };
+		C1C1C1C10000000100000001 /* UpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C10000000100000011 /* UpdateController.swift */; };
+		C1C1C1C10000000100000002 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C1C1C1C10000000100000031 /* Sparkle */; };
+		B1B1B1B10000000100000001 /* ModelCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000011 /* ModelCatalogTests.swift */; };
+		B1B1B1B10000000100000002 /* SetupWizardModelSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000012 /* SetupWizardModelSelectionTests.swift */; };
+		B1B1B1B10000000100000003 /* ModelManagerRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000013 /* ModelManagerRuntimeTests.swift */; };
+		B1B1B1B10000000100000004 /* TranscriptionRunnerRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000014 /* TranscriptionRunnerRoutingTests.swift */; };
+		B1B1B1B10000000100000005 /* AppDelegateFailureRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000015 /* AppDelegateFailureRoutingTests.swift */; };
+		B1B1B1B10000000100000006 /* TestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000016 /* TestDoubles.swift */; };
+		B1B1B1B10000000100000007 /* SpeakUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000017 /* SpeakUITests.swift */; };
+		B1B1B1B10000000100000008 /* UpdateControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B10000000100000019 /* UpdateControllerTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B1B1B1B10000000100000060 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1A1A1A10000000100000060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1A1A1A10000000100000050;
+			remoteInfo = Speak;
+		};
+		B1B1B1B10000000100000061 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1A1A1A10000000100000060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1A1A1A10000000100000050;
+			remoteInfo = Speak;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A1A1A1A10000000100000010 /* Speak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Speak.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -46,10 +74,37 @@
 		A1A1A1A10000000100000023 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
 		A1A1A1A10000000100000025 /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
 		A1A1A1A10000000100000027 /* SetupWizardWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWizardWindowController.swift; sourceTree = "<group>"; };
+		A1A1A1A1000000010000002B /* ModelManaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManaging.swift; sourceTree = "<group>"; };
+		C1C1C1C10000000100000011 /* UpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateController.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000010 /* SpeakTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SpeakTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1B1B1B10000000100000011 /* ModelCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalogTests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000012 /* SetupWizardModelSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWizardModelSelectionTests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000013 /* ModelManagerRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerRuntimeTests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000014 /* TranscriptionRunnerRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionRunnerRoutingTests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000015 /* AppDelegateFailureRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegateFailureRoutingTests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000016 /* TestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDoubles.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000017 /* SpeakUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakUITests.swift; sourceTree = "<group>"; };
+		B1B1B1B10000000100000018 /* SpeakUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SpeakUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1B1B1B10000000100000019 /* UpdateControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateControllerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A1A1A1A10000000100000030 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1C1C1C10000000100000002 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000030 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000031 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -63,6 +118,8 @@
 			isa = PBXGroup;
 			children = (
 				A1A1A1A10000000100000041 /* STTMenuBar */,
+				B1B1B1B10000000100000040 /* SpeakTests */,
+				B1B1B1B10000000100000041 /* SpeakUITests */,
 				A1A1A1A10000000100000042 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,7 +141,9 @@
 				A1A1A1A10000000100000015 /* PasteController.swift */,
 				A1A1A1A10000000100000016 /* TranscriptionRunner.swift */,
 				A1A1A1A10000000100000023 /* ModelCatalog.swift */,
+				A1A1A1A1000000010000002B /* ModelManaging.swift */,
 				A1A1A1A10000000100000025 /* ModelManager.swift */,
+				C1C1C1C10000000100000011 /* UpdateController.swift */,
 				A1A1A1A10000000100000017 /* Settings.swift */,
 				A1A1A1A1000000010000001C /* Assets.xcassets */,
 				A1A1A1A10000000100000018 /* Info.plist */,
@@ -96,8 +155,32 @@
 			isa = PBXGroup;
 			children = (
 				A1A1A1A10000000100000010 /* Speak.app */,
+				B1B1B1B10000000100000010 /* SpeakTests.xctest */,
+				B1B1B1B10000000100000018 /* SpeakUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B1B1B1B10000000100000040 /* SpeakTests */ = {
+			isa = PBXGroup;
+			children = (
+				B1B1B1B10000000100000011 /* ModelCatalogTests.swift */,
+				B1B1B1B10000000100000012 /* SetupWizardModelSelectionTests.swift */,
+				B1B1B1B10000000100000013 /* ModelManagerRuntimeTests.swift */,
+				B1B1B1B10000000100000014 /* TranscriptionRunnerRoutingTests.swift */,
+				B1B1B1B10000000100000015 /* AppDelegateFailureRoutingTests.swift */,
+				B1B1B1B10000000100000016 /* TestDoubles.swift */,
+				B1B1B1B10000000100000019 /* UpdateControllerTests.swift */,
+			);
+			path = SpeakTests;
+			sourceTree = "<group>";
+		};
+		B1B1B1B10000000100000041 /* SpeakUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B1B1B1B10000000100000017 /* SpeakUITests.swift */,
+			);
+			path = SpeakUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -117,11 +200,63 @@
 			dependencies = (
 			);
 			name = Speak;
+			packageProductDependencies = (
+				C1C1C1C10000000100000031 /* Sparkle */,
+			);
 			productName = Speak;
 			productReference = A1A1A1A10000000100000010 /* Speak.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B1B1B1B10000000100000050 /* SpeakTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1B1B1B10000000100000080 /* Build configuration list for PBXNativeTarget "SpeakTests" */;
+			buildPhases = (
+				B1B1B1B10000000100000032 /* Sources */,
+				B1B1B1B10000000100000030 /* Frameworks */,
+				B1B1B1B10000000100000034 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1B1B1B10000000100000070 /* PBXTargetDependency */,
+			);
+			name = SpeakTests;
+			productName = SpeakTests;
+			productReference = B1B1B1B10000000100000010 /* SpeakTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B1B1B1B10000000100000051 /* SpeakUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1B1B1B10000000100000081 /* Build configuration list for PBXNativeTarget "SpeakUITests" */;
+			buildPhases = (
+				B1B1B1B10000000100000033 /* Sources */,
+				B1B1B1B10000000100000031 /* Frameworks */,
+				B1B1B1B10000000100000035 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1B1B1B10000000100000071 /* PBXTargetDependency */,
+			);
+			name = SpeakUITests;
+			productName = SpeakUITests;
+			productReference = B1B1B1B10000000100000018 /* SpeakUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXTargetDependency section */
+		B1B1B1B10000000100000070 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1A1A1A10000000100000050 /* Speak */;
+			targetProxy = B1B1B1B10000000100000060 /* PBXContainerItemProxy */;
+		};
+		B1B1B1B10000000100000071 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1A1A1A10000000100000050 /* Speak */;
+			targetProxy = B1B1B1B10000000100000061 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		A1A1A1A10000000100000060 /* Project object */ = {
@@ -132,6 +267,14 @@
 				TargetAttributes = {
 					A1A1A1A10000000100000050 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					B1B1B1B10000000100000050 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1A1A1A10000000100000050;
+					};
+					B1B1B1B10000000100000051 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1A1A1A10000000100000050;
 					};
 				};
 			};
@@ -144,11 +287,16 @@
 				Base,
 			);
 			mainGroup = A1A1A1A10000000100000040;
+			packageReferences = (
+				C1C1C1C10000000100000030 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			productRefGroup = A1A1A1A10000000100000042 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				A1A1A1A10000000100000050 /* Speak */,
+				B1B1B1B10000000100000050 /* SpeakTests */,
+				B1B1B1B10000000100000051 /* SpeakUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -159,6 +307,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1A1A1A1000000010000000B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000034 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000035 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,12 +337,24 @@
 			inputPaths = (
 				"$(SRCROOT)/../scripts/bundle_resources.sh",
 				"$(SRCROOT)/../python/transcribe.py",
+				"$(SRCROOT)/../python/requirements-parakeet-v3.txt",
 				"$(SRCROOT)/../python/.venv/bin/python",
-			);
+					"$(SRCROOT)/../rust/parakeet-worker/Cargo.toml",
+					"$(SRCROOT)/../rust/parakeet-worker/src/main.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/Cargo.toml",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/lib.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/audio.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/engines/mod.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/engines/parakeet/engine.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/engines/parakeet/model.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/engines/parakeet/mod.rs",
+					"$(SRCROOT)/../rust/vendor/transcribe-rs/src/engines/parakeet/timestamps.rs",
+				);
 			outputFileListPaths = (
 			);
 			outputPaths = (
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/python",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/parakeet-worker",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -207,12 +381,47 @@
 				A1A1A1A1000000010000000D /* PermissionSetupWindowController.swift in Sources */,
 				A1A1A1A10000000100000020 /* PermissionCoordinator.swift in Sources */,
 				A1A1A1A10000000100000022 /* ModelCatalog.swift in Sources */,
+				A1A1A1A1000000010000002A /* ModelManaging.swift in Sources */,
 				A1A1A1A10000000100000024 /* ModelManager.swift in Sources */,
 				A1A1A1A10000000100000026 /* SetupWizardWindowController.swift in Sources */,
+				C1C1C1C10000000100000001 /* UpdateController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000032 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1B1B1B10000000100000005 /* AppDelegateFailureRoutingTests.swift in Sources */,
+				B1B1B1B10000000100000003 /* ModelManagerRuntimeTests.swift in Sources */,
+				B1B1B1B10000000100000001 /* ModelCatalogTests.swift in Sources */,
+				B1B1B1B10000000100000002 /* SetupWizardModelSelectionTests.swift in Sources */,
+				B1B1B1B10000000100000006 /* TestDoubles.swift in Sources */,
+				B1B1B1B10000000100000004 /* TranscriptionRunnerRoutingTests.swift in Sources */,
+				B1B1B1B10000000100000008 /* UpdateControllerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1B1B1B10000000100000033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1B1B1B10000000100000007 /* SpeakUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C1C1C1C10000000100000030 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCBuildConfiguration section */
 		A1A1A1A10000000100000080 /* Debug */ = {
@@ -228,6 +437,11 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"/usr/lib/swift",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;
@@ -249,6 +463,11 @@
 				DEVELOPMENT_TEAM = JJBQ63FWWY;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = STTMenuBar/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"/usr/lib/swift",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak;
 				PRODUCT_NAME = Speak;
@@ -339,6 +558,64 @@
 			};
 			name = Release;
 		};
+		B1B1B1B10000000100000090 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Speak.app/Contents/MacOS/Speak";
+			};
+			name = Debug;
+		};
+		B1B1B1B10000000100000091 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Speak.app/Contents/MacOS/Speak";
+			};
+			name = Release;
+		};
+		B1B1B1B10000000100000092 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Speak;
+			};
+			name = Debug;
+		};
+		B1B1B1B10000000100000093 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.postsoftware.speak.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Speak;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -360,7 +637,33 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B1B1B1B10000000100000080 /* Build configuration list for PBXNativeTarget "SpeakTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1B1B1B10000000100000090 /* Debug */,
+				B1B1B1B10000000100000091 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1B1B1B10000000100000081 /* Build configuration list for PBXNativeTarget "SpeakUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1B1B1B10000000100000092 /* Debug */,
+				B1B1B1B10000000100000093 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C1C1C1C10000000100000031 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C1C1C1C10000000100000030 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A1A1A1A10000000100000060 /* Project object */;
 }

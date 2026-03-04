@@ -1,12 +1,26 @@
 import Foundation
 
 enum PythonRuntimeEnvironment {
-    static func makeEnvironment(for pythonURL: URL, base: [String: String] = ProcessInfo.processInfo.environment) -> [String: String] {
+    static func makeEnvironment(
+        for pythonURL: URL,
+        additionalPythonPaths: [String] = [],
+        base: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String: String] {
         var env = base
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONNOUSERSITE"] = "1"
+        env["PIP_NO_CACHE_DIR"] = "1"
+        env["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+        env["NO_COLOR"] = "1"
         if let pythonHome = bundledPythonHome(for: pythonURL) {
             env["PYTHONHOME"] = pythonHome
+        }
+        if !additionalPythonPaths.isEmpty {
+            var merged = additionalPythonPaths
+            if let existing = env["PYTHONPATH"], !existing.isEmpty {
+                merged.append(existing)
+            }
+            env["PYTHONPATH"] = merged.joined(separator: ":")
         }
         return env
     }

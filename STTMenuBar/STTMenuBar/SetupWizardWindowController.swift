@@ -4,8 +4,8 @@ import AVFoundation
 final class SetupWizardWindowController: NSWindowController {
     var onSetupCompleted: (() -> Void)?
 
-    private let permissionCoordinator: PermissionCoordinator
-    private let modelManager: ModelManager
+    private let permissionCoordinator: PermissionCoordinating
+    private let modelManager: ModelManaging
 
     private let microphoneStatusLabel = NSTextField(labelWithString: "")
     private let accessibilityStatusLabel = NSTextField(labelWithString: "")
@@ -24,9 +24,10 @@ final class SetupWizardWindowController: NSWindowController {
 
     private var currentInfo: RemoteModelInfo?
     private var currentInfoFetchID = UUID()
+    private var modelSelectionNotice: String?
     private var hasNotifiedCompletion = false
 
-    init(permissionCoordinator: PermissionCoordinator, modelManager: ModelManager) {
+    init(permissionCoordinator: PermissionCoordinating, modelManager: ModelManaging) {
         self.permissionCoordinator = permissionCoordinator
         self.modelManager = modelManager
 
@@ -131,8 +132,12 @@ final class SetupWizardWindowController: NSWindowController {
 
         microphoneButton.target = self
         microphoneButton.action = #selector(requestMicrophone)
+        microphoneButton.identifier = NSUserInterfaceItemIdentifier("setup.microphoneButton")
+        microphoneButton.setAccessibilityIdentifier("setup.microphoneButton")
         accessibilityButton.target = self
         accessibilityButton.action = #selector(requestAccessibility)
+        accessibilityButton.identifier = NSUserInterfaceItemIdentifier("setup.accessibilityButton")
+        accessibilityButton.setAccessibilityIdentifier("setup.accessibilityButton")
 
         let permissionsGrid = NSGridView(views: [
             [permissionInfoBlock(title: "Microphone", detail: "Required to capture your voice for transcription.", statusLabel: microphoneStatusLabel), microphoneButton],
@@ -159,6 +164,8 @@ final class SetupWizardWindowController: NSWindowController {
         modelPicker.target = self
         modelPicker.action = #selector(modelSelectionChanged)
         modelPicker.selectItem(at: defaultModelIndex())
+        modelPicker.identifier = NSUserInterfaceItemIdentifier("setup.modelPicker")
+        modelPicker.setAccessibilityIdentifier("setup.modelPicker")
         root.addArrangedSubview(modelPicker)
 
         modelDescriptionLabel.font = .systemFont(ofSize: 13, weight: .medium)
@@ -176,6 +183,12 @@ final class SetupWizardWindowController: NSWindowController {
         modelSizeBadgeLabel.layer?.masksToBounds = true
 
         modelStatusLabel.textColor = .secondaryLabelColor
+        modelDescriptionLabel.identifier = NSUserInterfaceItemIdentifier("setup.modelDescription")
+        modelDescriptionLabel.setAccessibilityIdentifier("setup.modelDescription")
+        modelStatusLabel.identifier = NSUserInterfaceItemIdentifier("setup.modelStatus")
+        modelStatusLabel.setAccessibilityIdentifier("setup.modelStatus")
+        modelSizeLabel.identifier = NSUserInterfaceItemIdentifier("setup.modelSize")
+        modelSizeLabel.setAccessibilityIdentifier("setup.modelSize")
         configureWrappingLabel(modelDescriptionLabel)
         configureWrappingLabel(modelSizeLabel)
         configureWrappingLabel(modelStatusLabel)
@@ -199,6 +212,8 @@ final class SetupWizardWindowController: NSWindowController {
 
         consentCheckbox.target = self
         consentCheckbox.action = #selector(consentChanged)
+        consentCheckbox.identifier = NSUserInterfaceItemIdentifier("setup.consentCheckbox")
+        consentCheckbox.setAccessibilityIdentifier("setup.consentCheckbox")
         root.addArrangedSubview(consentCheckbox)
 
         modelSpinner.style = .spinning
@@ -207,6 +222,8 @@ final class SetupWizardWindowController: NSWindowController {
         downloadButton.target = self
         downloadButton.action = #selector(downloadSelectedModel)
         downloadButton.isEnabled = false
+        downloadButton.identifier = NSUserInterfaceItemIdentifier("setup.downloadButton")
+        downloadButton.setAccessibilityIdentifier("setup.downloadButton")
 
         let controls = NSStackView(views: [modelSpinner, NSView(), downloadButton])
         controls.orientation = .horizontal
@@ -279,14 +296,14 @@ final class SetupWizardWindowController: NSWindowController {
             return activeIndex
         }
 
-        return ModelCatalog.all.firstIndex(where: { $0.id == ModelCatalog.defaultModelID }) ?? 1
+        return ModelCatalog.all.firstIndex(where: { $0.id == ModelCatalog.defaultModelID }) ?? 0
     }
 
     private func updateModelDescriptionAndButtonLabel() {
         let variant = selectedVariant
         modelDescriptionLabel.stringValue = variant.plainDescription
-        if variant.isRecommended {
-            downloadButton.title = "Download Recommended"
+        if variant.id == ModelCatalog.defaultModelID {
+            downloadButton.title = "Download Default"
         } else {
             downloadButton.title = "Download & Activate"
         }
@@ -297,35 +314,90 @@ final class SetupWizardWindowController: NSWindowController {
 
         currentInfoFetchID = UUID()
         let fetchID = currentInfoFetchID
+        let variant = selectedVariant
 
         currentInfo = nil
-        modelSizeLabel.stringValue = "Checking exact download size..."
+        modelSizeLabel.stringValue = "Checking runtime and download size..."
         modelSizeBadgeLabel.isHidden = true
         modelStatusLabel.stringValue = ""
         modelStatusLabel.textColor = .secondaryLabelColor
         downloadButton.isEnabled = false
 
-        modelManager.fetchRemoteInfo(for: selectedVariant) { [weak self] result in
+        modelManager.checkRuntime(for: variant) { [weak self] runtimeResult in
             guard let self else { return }
             guard fetchID == self.currentInfoFetchID else { return }
 
-            switch result {
-            case .success(let info):
-                self.currentInfo = info
-                self.modelSizeLabel.stringValue = "Download size: \(ByteCountFormatter.string(fromByteCount: info.downloadBytes, countStyle: .file))"
-                self.modelSizeBadgeLabel.isHidden = (info.sizeSource == .exact)
-                self.modelStatusLabel.stringValue = ""
-                self.modelStatusLabel.textColor = .secondaryLabelColor
+            switch runtimeResult {
+            case .success(let runtimeInfo):
+                if variant.engine == .parakeetTDTV3 && runtimeInfo.isHardUnsupported {
+                    self.applyParakeetFallback(reason: runtimeInfo.reason)
+                    return
+                }
+
+                if variant.engine == .parakeetTDTV3 && runtimeInfo.requiresInstall {
+                    self.modelSelectionNotice = "Additional Parakeet runtime components will be installed during setup."
+                }
+
+                self.modelManager.fetchRemoteInfo(for: self.selectedVariant) { [weak self] infoResult in
+                    guard let self else { return }
+                    guard fetchID == self.currentInfoFetchID else { return }
+
+                    switch infoResult {
+                    case .success(let info):
+                        self.currentInfo = info
+                        self.modelSizeLabel.stringValue = "Download size: \(ByteCountFormatter.string(fromByteCount: info.downloadBytes, countStyle: .file))"
+                        self.modelSizeBadgeLabel.isHidden = (info.sizeSource == .exact)
+
+                        if let notice = self.modelSelectionNotice {
+                            self.modelStatusLabel.stringValue = notice
+                            self.modelStatusLabel.textColor = .systemOrange
+                        } else {
+                            self.modelStatusLabel.stringValue = ""
+                            self.modelStatusLabel.textColor = .secondaryLabelColor
+                        }
+                    case .failure(let error):
+                        self.currentInfo = nil
+                        self.modelSizeLabel.stringValue = "Download size unavailable"
+                        self.modelSizeBadgeLabel.isHidden = true
+                        self.modelStatusLabel.stringValue = "Could not reach model source. Check internet and try again.\n\(self.compactErrorMessage(error))"
+                        self.modelStatusLabel.textColor = .systemRed
+                    }
+
+                    self.downloadButton.isEnabled = self.permissionsGranted && self.consentCheckbox.state == .on && self.currentInfo != nil
+                }
             case .failure(let error):
                 self.currentInfo = nil
                 self.modelSizeLabel.stringValue = "Download size unavailable"
                 self.modelSizeBadgeLabel.isHidden = true
-                self.modelStatusLabel.stringValue = "Could not reach model source. Check internet and try again.\n\(self.compactErrorMessage(error))"
+                self.modelStatusLabel.stringValue = "Could not validate runtime compatibility.\n\(self.compactErrorMessage(error))"
                 self.modelStatusLabel.textColor = .systemRed
+                self.downloadButton.isEnabled = false
             }
-
-            self.downloadButton.isEnabled = self.permissionsGranted && self.consentCheckbox.state == .on && self.currentInfo != nil
         }
+    }
+
+    private func applyParakeetFallback(reason: String) {
+        guard let fallbackIndex = ModelCatalog.all.firstIndex(where: { $0.id == ModelCatalog.smallEN.id }) else {
+            currentInfo = nil
+            modelSizeLabel.stringValue = "Download size unavailable"
+            modelStatusLabel.textColor = .systemRed
+            modelStatusLabel.stringValue = "Parakeet v3 is unsupported here and no fallback model is available."
+            downloadButton.isEnabled = false
+            return
+        }
+
+        let cleanReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanReason.isEmpty {
+            modelSelectionNotice = "Parakeet v3 is unsupported on this machine. Switched to Small (Fallback)."
+        } else {
+            modelSelectionNotice = "Parakeet v3 is unsupported on this machine (\(cleanReason)). Switched to Small (Fallback)."
+        }
+
+        modelPicker.selectItem(at: fallbackIndex)
+        updateModelDescriptionAndButtonLabel()
+        consentCheckbox.state = .off
+        downloadButton.isEnabled = false
+        refreshModelInfo()
     }
 
     @objc private func requestMicrophone() {
@@ -346,6 +418,7 @@ final class SetupWizardWindowController: NSWindowController {
     }
 
     @objc private func modelSelectionChanged() {
+        modelSelectionNotice = nil
         updateModelDescriptionAndButtonLabel()
         consentCheckbox.state = .off
         downloadButton.isEnabled = false
@@ -426,5 +499,28 @@ final class SetupWizardWindowController: NSWindowController {
             return String(lines.prefix(380)) + "…"
         }
         return lines
+    }
+
+    var testSelectedModelID: String {
+        selectedVariant.id
+    }
+
+    var testDownloadButtonEnabled: Bool {
+        downloadButton.isEnabled
+    }
+
+    var testModelStatusText: String {
+        modelStatusLabel.stringValue
+    }
+
+    func testSetConsent(agreed: Bool) {
+        consentCheckbox.state = agreed ? .on : .off
+        consentChanged()
+    }
+
+    func testSelectModel(id: String) {
+        guard let index = ModelCatalog.all.firstIndex(where: { $0.id == id }) else { return }
+        modelPicker.selectItem(at: index)
+        modelSelectionChanged()
     }
 }

@@ -6,11 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyMonitor = HotKeyMonitor()
     private let audioRecorder = AudioRecorder()
     private let soundPlayer = SystemSoundPlayer()
-    private let transcriptionRunner = TranscriptionRunner()
+    private let transcriptionRunner: TranscriptionRunner
     private let pasteController = PasteController()
     private let settings = Settings.shared
-    private let permissionCoordinator = PermissionCoordinator()
-    private let modelManager = ModelManager.shared
+    private let permissionCoordinator: PermissionCoordinating
+    private let modelManager: ModelManaging
+    private let updateController: UpdateChecking
 
     private var isRecording = false
     private var isTranscribing = false
@@ -21,6 +22,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var toggleItem: NSMenuItem?
     private var soundsItem: NSMenuItem?
+    private let launchEnvironment = ProcessInfo.processInfo.environment
+
+    override init() {
+        self.permissionCoordinator = PermissionCoordinator()
+        self.modelManager = ModelManager.shared
+        self.transcriptionRunner = TranscriptionRunner(modelManager: ModelManager.shared)
+        self.updateController = UpdateController()
+        super.init()
+    }
+
+    init(
+        permissionCoordinator: PermissionCoordinating,
+        modelManager: ModelManaging,
+        transcriptionRunner: TranscriptionRunner,
+        updateController: UpdateChecking = UpdateController()
+    ) {
+        self.permissionCoordinator = permissionCoordinator
+        self.modelManager = modelManager
+        self.transcriptionRunner = transcriptionRunner
+        self.updateController = updateController
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -32,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             completeLaunchAfterSetup()
         }
+
+        runUITestLaunchHooksIfNeeded()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -55,6 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.isVisible = true
         }
 
+        statusItem.menu = buildStatusMenu()
+    }
+
+    func buildStatusMenu() -> NSMenu {
         let menu = NSMenu()
 
         let toggle = NSMenuItem(title: "Start Recording", action: #selector(toggleRecording), keyEquivalent: "")
@@ -62,13 +91,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem = toggle
         menu.addItem(toggle)
 
-        let setup = NSMenuItem(title: "Run Setup...", action: #selector(openSetupWizard), keyEquivalent: "")
+        let setup = NSMenuItem(title: "Run Setup & Select Model", action: #selector(openSetupWizard), keyEquivalent: "")
         setup.target = self
         menu.addItem(setup)
 
-        let modelItem = NSMenuItem(title: "Select your model", action: #selector(openModelSelection), keyEquivalent: "")
-        modelItem.target = self
-        menu.addItem(modelItem)
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForAppUpdates), keyEquivalent: "")
+        checkForUpdatesItem.target = self
+        checkForUpdatesItem.isEnabled = true
+        menu.addItem(checkForUpdatesItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -101,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quit.target = self
         menu.addItem(quit)
 
-        statusItem.menu = menu
+        return menu
     }
 
     private func configureHotKeyCallbacks() {
@@ -199,19 +229,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 self.pasteController.insertText(text)
             case .failure(let error):
-                if let runnerError = error as? TranscriptionRunner.RunnerError,
-                   runnerError == .modelSetupRequired {
-                    self.showSetupWizard(activate: true)
-                    return
-                }
-
-                NSLog("Transcription failed: %@", error.localizedDescription)
-                let alert = NSAlert()
-                alert.messageText = "Transcription Failed"
-                alert.informativeText = error.localizedDescription
-                alert.addButton(withTitle: "OK")
-                alert.runModal()
+                self.handleTranscriptionError(error)
             }
+        }
+    }
+
+    static func shouldRouteParakeetFailureToSetup(message: String) -> Bool {
+        if message.contains("setup_required:") {
+            return true
+        }
+
+        guard message.contains("parakeet") else { return false }
+        let setupRecoverableSignals = [
+            "not supported",
+            "model directory is missing",
+            "could not locate downloaded parakeet model artifacts",
+            "bundled parakeet worker is missing"
+        ]
+        return setupRecoverableSignals.contains(where: { message.contains($0) })
+    }
+
+    private func handleTranscriptionError(_ error: Error) {
+        if let runnerError = error as? TranscriptionRunner.RunnerError,
+           runnerError == .modelSetupRequired {
+            showSetupWizard(activate: true)
+            return
+        }
+
+        let message = error.localizedDescription.lowercased()
+        if Self.shouldRouteParakeetFailureToSetup(message: message) {
+            showSetupWizard(activate: true)
+            return
+        }
+
+        NSLog("Transcription failed: %@", error.localizedDescription)
+        if isUITestMode {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Transcription Failed"
+        alert.informativeText = error.localizedDescription
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private var isUITestMode: Bool {
+        launchEnvironment["SPEAK_UI_TEST_MODE"] == "1"
+    }
+
+    private func runUITestLaunchHooksIfNeeded() {
+        guard isUITestMode else { return }
+
+        guard let simulatedError = launchEnvironment["SPEAK_UI_SIMULATE_TRANSCRIPTION_ERROR"],
+              simulatedError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self else { return }
+            let error = NSError(
+                domain: "Speak.UITest",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: simulatedError]
+            )
+            self.handleTranscriptionError(error)
         }
     }
 
@@ -300,8 +382,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showSetupWizard(activate: true)
     }
 
-    @objc private func openModelSelection() {
-        showSetupWizard(activate: true)
+    @objc func checkForAppUpdates() {
+        updateController.checkForUpdates()
     }
 
     @objc private func quitApp() {

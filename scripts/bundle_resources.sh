@@ -6,6 +6,12 @@ RESOURCES="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
 PY_SRC="${ROOT}/python/.venv"
 PY_DEST="${RESOURCES}/python"
 SCRIPT_SRC="${ROOT}/python/transcribe.py"
+PARAKEET_REQ_SRC="${ROOT}/python/requirements-parakeet-v3.txt"
+RUST_WORKER_MANIFEST="${ROOT}/rust/parakeet-worker/Cargo.toml"
+RUST_TARGET_DIR="${ROOT}/rust/target/parakeet-worker"
+RUST_PROFILE="release"
+RUST_WORKER_SRC="${RUST_TARGET_DIR}/${RUST_PROFILE}/parakeet-worker"
+RUST_WORKER_DEST="${RESOURCES}/parakeet-worker"
 ABS_PY_FRAMEWORK_PREFIX="/Library/Frameworks/Python.framework/Versions/"
 MODIFIED_MACHOS=()
 
@@ -144,10 +150,52 @@ if ! find "${PY_SRC}/lib" -path "*/site-packages/huggingface_hub/__init__.py" -p
   exit 1
 fi
 
+if [ ! -f "${PARAKEET_REQ_SRC}" ]; then
+  echo "Missing Parakeet runtime requirements file: ${PARAKEET_REQ_SRC}"
+  exit 1
+fi
+
+if [ ! -f "${RUST_WORKER_MANIFEST}" ]; then
+  echo "Missing Rust Parakeet worker manifest: ${RUST_WORKER_MANIFEST}"
+  exit 1
+fi
+
+CARGO_BIN=""
+if command -v cargo >/dev/null 2>&1; then
+  CARGO_BIN="$(command -v cargo)"
+else
+  for candidate in "${HOME:-}/.cargo/bin/cargo" "/opt/homebrew/bin/cargo" "/usr/local/bin/cargo"; do
+    if [ -n "${candidate}" ] && [ -x "${candidate}" ]; then
+      CARGO_BIN="${candidate}"
+      break
+    fi
+  done
+fi
+
+if [ -z "${CARGO_BIN}" ]; then
+  echo "Rust toolchain (cargo) is required to build the Parakeet worker."
+  echo "Install Rust from https://rustup.rs and ensure cargo is available to Xcode build scripts."
+  exit 1
+fi
+
+"${CARGO_BIN}" build \
+  --manifest-path "${RUST_WORKER_MANIFEST}" \
+  --target-dir "${RUST_TARGET_DIR}" \
+  --locked \
+  --release
+
+if [ ! -f "${RUST_WORKER_SRC}" ]; then
+  echo "Parakeet worker build did not produce binary at ${RUST_WORKER_SRC}"
+  exit 1
+fi
+
 mkdir -p "${PY_DEST}"
 # -L dereferences symlinks so bundled Python does not depend on build-machine paths.
 rsync -aL --delete "${PY_SRC}/" "${PY_DEST}/"
 cp "${SCRIPT_SRC}" "${RESOURCES}/python/transcribe.py"
+cp "${PARAKEET_REQ_SRC}" "${RESOURCES}/python/requirements-parakeet-v3.txt"
+cp "${RUST_WORKER_SRC}" "${RUST_WORKER_DEST}"
+chmod +x "${RUST_WORKER_DEST}"
 for pybin in "${PY_DEST}/bin/python" "${PY_DEST}/bin/python3" "${PY_DEST}"/bin/python3.*; do
   [ -f "${pybin}" ] && chmod +x "${pybin}" || true
 done
@@ -195,3 +243,8 @@ rewrite_absolute_python_framework_refs
 ensure_no_absolute_python_framework_refs
 ad_hoc_sign_modified_machos
 verify_signed_modified_machos
+
+if ! codesign --force --sign - "${RUST_WORKER_DEST}" >/dev/null 2>&1; then
+  echo "Failed to ad-hoc sign bundled Parakeet worker: ${RUST_WORKER_DEST}"
+  exit 1
+fi

@@ -1,0 +1,10 @@
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/socks-b90d23fcfe5b5d8a.d: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v4.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v5.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/writev.rs
+
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/libsocks-b90d23fcfe5b5d8a.rlib: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v4.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v5.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/writev.rs
+
+/Users/amardeep/Library/CloudStorage/Dropbox/Personal/Works - Personal/Post Software/STT Speech to text/rust/target/parakeet-worker/release/deps/libsocks-b90d23fcfe5b5d8a.rmeta: /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/lib.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v4.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v5.rs /Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/writev.rs
+
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/lib.rs:
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v4.rs:
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/v5.rs:
+/Users/amardeep/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/socks-0.3.4/src/writev.rs:
