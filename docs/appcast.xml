@@ -8,14 +8,14 @@
     <description>Speak macOS release feed</description>
     <language>en</language>
     <item>
-      <title>Speak 0.2</title>
-      <pubDate>Wed, 04 Mar 2026 15:48:44 +0000</pubDate>
-      <enclosure url="https://github.com/Post-Software/Speak.app/releases/download/v0.2/Speak-0.2.zip"
-                 sparkle:version="4"
-                 sparkle:shortVersionString="0.2"
-                 length="148760270"
+      <title>Speak 0.2.1</title>
+      <pubDate>Wed, 04 Mar 2026 23:01:39 +0000</pubDate>
+      <enclosure url="https://github.com/Post-Software/Speak.app/releases/download/v0.2.1/Speak-0.2.1.zip"
+                 sparkle:version="5"
+                 sparkle:shortVersionString="0.2.1"
+                 length="148761781"
                  type="application/octet-stream"
-                 sparkle:edSignature="8vclSE779luhchBj/tt+/HAKVjZ7HO4mn0LIykVKcJHAreEiJq9uWgFMaDJ+gDwAEj33tYHgbyMt/RRPdf6NBg==" />
+                 sparkle:edSignature="HrYpq79C8dEHhf4hfbB6dYa8I2ruGZ4sElm+Op8sUBytR3QwUTcwjaF/cAlwE1E9PKgbLr1koU3wzWXdiRVfAg==" />
     </item>
   </channel>
 </rss>

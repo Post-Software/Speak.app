@@ -72,12 +72,16 @@ final class SetupWizardWindowController: NSWindowController {
             modelSizeLabel.stringValue = "Complete Step 1 first."
             modelSizeBadgeLabel.isHidden = true
             modelStatusLabel.stringValue = ""
-            downloadButton.isEnabled = false
+            updateDownloadButtonState()
         }
 
         if setupIsComplete {
-            modelStatusLabel.textColor = .systemGreen
-            modelStatusLabel.stringValue = "Setup complete. Speak is ready."
+            if selectedModelIsDownloaded {
+                presentDownloadedStatus()
+            } else {
+                modelStatusLabel.textColor = .systemGreen
+                modelStatusLabel.stringValue = "Setup complete. Speak is ready."
+            }
             if hasNotifiedCompletion == false {
                 hasNotifiedCompletion = true
                 onSetupCompleted?()
@@ -93,6 +97,11 @@ final class SetupWizardWindowController: NSWindowController {
 
     private var setupIsComplete: Bool {
         permissionsGranted && !modelManager.needsSetup()
+    }
+
+    private var selectedModelIsDownloaded: Bool {
+        guard modelManager.manifest.activeModelID == selectedVariant.id else { return false }
+        return modelManager.activeModelLocalPath != nil
     }
 
     private var selectedVariant: ModelVariant {
@@ -286,7 +295,7 @@ final class SetupWizardWindowController: NSWindowController {
             consentCheckbox.state = .off
         }
 
-        downloadButton.isEnabled = enabled && consentCheckbox.state == .on && currentInfo != nil
+        updateDownloadButtonState()
         updateModelDescriptionAndButtonLabel()
     }
 
@@ -302,7 +311,9 @@ final class SetupWizardWindowController: NSWindowController {
     private func updateModelDescriptionAndButtonLabel() {
         let variant = selectedVariant
         modelDescriptionLabel.stringValue = variant.plainDescription
-        if variant.id == ModelCatalog.defaultModelID {
+        if selectedModelIsDownloaded {
+            downloadButton.title = "Downloaded"
+        } else if variant.id == ModelCatalog.defaultModelID {
             downloadButton.title = "Download Default"
         } else {
             downloadButton.title = "Download & Activate"
@@ -317,11 +328,24 @@ final class SetupWizardWindowController: NSWindowController {
         let variant = selectedVariant
 
         currentInfo = nil
+        if selectedModelIsDownloaded {
+            if let downloadedBytes = modelManager.manifest.lastKnownModelSizes[variant.id] {
+                modelSizeLabel.stringValue = "Download size: \(ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file))"
+            } else {
+                modelSizeLabel.stringValue = "Model already downloaded."
+            }
+            modelSizeBadgeLabel.isHidden = true
+            presentDownloadedStatus()
+            updateDownloadButtonState()
+            updateModelDescriptionAndButtonLabel()
+            return
+        }
+
         modelSizeLabel.stringValue = "Checking runtime and download size..."
         modelSizeBadgeLabel.isHidden = true
         modelStatusLabel.stringValue = ""
         modelStatusLabel.textColor = .secondaryLabelColor
-        downloadButton.isEnabled = false
+        updateDownloadButtonState()
 
         modelManager.checkRuntime(for: variant) { [weak self] runtimeResult in
             guard let self else { return }
@@ -363,7 +387,8 @@ final class SetupWizardWindowController: NSWindowController {
                         self.modelStatusLabel.textColor = .systemRed
                     }
 
-                    self.downloadButton.isEnabled = self.permissionsGranted && self.consentCheckbox.state == .on && self.currentInfo != nil
+                    self.updateDownloadButtonState()
+                    self.updateModelDescriptionAndButtonLabel()
                 }
             case .failure(let error):
                 self.currentInfo = nil
@@ -371,7 +396,8 @@ final class SetupWizardWindowController: NSWindowController {
                 self.modelSizeBadgeLabel.isHidden = true
                 self.modelStatusLabel.stringValue = "Could not validate runtime compatibility.\n\(self.compactErrorMessage(error))"
                 self.modelStatusLabel.textColor = .systemRed
-                self.downloadButton.isEnabled = false
+                self.updateDownloadButtonState()
+                self.updateModelDescriptionAndButtonLabel()
             }
         }
     }
@@ -382,7 +408,7 @@ final class SetupWizardWindowController: NSWindowController {
             modelSizeLabel.stringValue = "Download size unavailable"
             modelStatusLabel.textColor = .systemRed
             modelStatusLabel.stringValue = "Parakeet v3 is unsupported here and no fallback model is available."
-            downloadButton.isEnabled = false
+            updateDownloadButtonState()
             return
         }
 
@@ -396,7 +422,7 @@ final class SetupWizardWindowController: NSWindowController {
         modelPicker.selectItem(at: fallbackIndex)
         updateModelDescriptionAndButtonLabel()
         consentCheckbox.state = .off
-        downloadButton.isEnabled = false
+        updateDownloadButtonState()
         refreshModelInfo()
     }
 
@@ -421,12 +447,12 @@ final class SetupWizardWindowController: NSWindowController {
         modelSelectionNotice = nil
         updateModelDescriptionAndButtonLabel()
         consentCheckbox.state = .off
-        downloadButton.isEnabled = false
+        updateDownloadButtonState()
         refreshModelInfo()
     }
 
     @objc private func consentChanged() {
-        downloadButton.isEnabled = permissionsGranted && consentCheckbox.state == .on && currentInfo != nil
+        updateDownloadButtonState()
     }
 
     @objc private func downloadSelectedModel() {
@@ -450,7 +476,8 @@ final class SetupWizardWindowController: NSWindowController {
 
             self.modelSpinner.stopAnimation(nil)
             self.setInstallControlsEnabled(true)
-            self.downloadButton.isEnabled = self.permissionsGranted && self.consentCheckbox.state == .on && self.currentInfo != nil
+            self.updateDownloadButtonState()
+            self.updateModelDescriptionAndButtonLabel()
 
             switch result {
             case .success:
@@ -477,10 +504,22 @@ final class SetupWizardWindowController: NSWindowController {
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         if let cell = label.cell as? NSTextFieldCell {
             cell.wraps = true
-            cell.lineBreakMode = .byCharWrapping
+            cell.lineBreakMode = .byWordWrapping
             cell.truncatesLastVisibleLine = false
             cell.isScrollable = false
         }
+    }
+
+    private func presentDownloadedStatus() {
+        modelStatusLabel.textColor = .systemGreen
+        modelStatusLabel.stringValue = "Downloaded"
+    }
+
+    private func updateDownloadButtonState() {
+        downloadButton.isEnabled = permissionsGranted &&
+            consentCheckbox.state == .on &&
+            currentInfo != nil &&
+            !selectedModelIsDownloaded
     }
 
     private func compactErrorMessage(_ error: Error) -> String {
@@ -511,6 +550,17 @@ final class SetupWizardWindowController: NSWindowController {
 
     var testModelStatusText: String {
         modelStatusLabel.stringValue
+    }
+
+    var testDownloadButtonTitle: String {
+        downloadButton.title
+    }
+
+    var testModelDescriptionLineBreakMode: NSLineBreakMode {
+        guard let cell = modelDescriptionLabel.cell as? NSTextFieldCell else {
+            return .byTruncatingTail
+        }
+        return cell.lineBreakMode
     }
 
     func testSetConsent(agreed: Bool) {

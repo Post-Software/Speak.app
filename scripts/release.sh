@@ -39,8 +39,8 @@ if [[ -f "${RELEASE_ENV_PATH}" ]]; then
   set +a
 fi
 
-VERSION="${VERSION:-0.2}"
-BUILD_NUMBER="${BUILD_NUMBER:-4}"
+VERSION="${VERSION:-0.2.1}"
+BUILD_NUMBER="${BUILD_NUMBER:-5}"
 SPARKLE_SKIP="${SPARKLE_SKIP:-0}"
 SPARKLE_SIGN_UPDATE_BIN="${SPARKLE_SIGN_UPDATE_BIN:-$(command -v sign_update || true)}"
 SPARKLE_RELEASE_BASE_URL="${SPARKLE_RELEASE_BASE_URL:-https://github.com/Post-Software/Speak.app/releases/download/v${VERSION}}"

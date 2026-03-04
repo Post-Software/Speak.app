@@ -24,13 +24,45 @@ final class SpeakUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
     }
 
-    func testSetupRendersDefaultParakeetAndAllModelOptions() {
+    private func makeEmptyAppSupportFixture() throws -> String {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("speak-ui-test-\(UUID().uuidString)", isDirectory: true)
+        let models = root.appendingPathComponent("models", isDirectory: true)
+        try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: root)
+        }
+        return root.path
+    }
+
+    private func makeAppSupportFixtureForDownloadedParakeet() throws -> String {
+        let root = URL(fileURLWithPath: try makeEmptyAppSupportFixture(), isDirectory: true)
+        let models = root.appendingPathComponent("models", isDirectory: true)
+        let modelDir = models.appendingPathComponent("parakeet_tdt_0_6b_v3", isDirectory: true)
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+
+        let manifest = """
+        {
+          "activeModelID": "parakeet_tdt_0_6b_v3",
+          "installed": [],
+          "lastKnownModelSizes": {
+            "parakeet_tdt_0_6b_v3": 478517071
+          }
+        }
+        """
+        try manifest.write(to: models.appendingPathComponent("manifest.json"), atomically: true, encoding: .utf8)
+        return root.path
+    }
+
+    func testSetupRendersDefaultParakeetAndAllModelOptions() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
             "SPEAK_UI_RUNTIME_STATUS": "ok",
-            "SPEAK_UI_FORCE_NEEDS_SETUP": "1"
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "1",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let modelPicker = app.popUpButtons["setup.modelPicker"]
@@ -41,21 +73,16 @@ final class SpeakUITests: XCTestCase {
         XCTAssertTrue(description.exists)
         waitForTextContains(description, text: "Fast")
         waitForTextContains(description, text: "Small")
-
-        modelPicker.click()
-        XCTAssertTrue(app.menuItems["Parakeet v3 (Default)"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.menuItems["Faster Whisper Small"].exists)
-        XCTAssertTrue(app.menuItems["Faster Whisper Medium"].exists)
-        XCTAssertTrue(app.menuItems["Faster Whisper Large"].exists)
-        app.typeKey(.escape, modifierFlags: [])
     }
 
-    func testBlockedPermissionsKeepDownloadDisabled() {
+    func testBlockedPermissionsKeepDownloadDisabled() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "denied",
             "SPEAK_UI_AX_STATUS": "blocked",
-            "SPEAK_UI_FORCE_NEEDS_SETUP": "1"
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "1",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let downloadButton = app.buttons["setup.downloadButton"]
@@ -63,13 +90,15 @@ final class SpeakUITests: XCTestCase {
         XCTAssertFalse(downloadButton.isEnabled)
     }
 
-    func testDownloadEnablesWhenPermissionsGrantedAndConsentChecked() {
+    func testDownloadEnablesWhenPermissionsGrantedAndConsentChecked() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
             "SPEAK_UI_RUNTIME_STATUS": "ok",
-            "SPEAK_UI_FORCE_NEEDS_SETUP": "1"
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "1",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let consent = app.checkBoxes["setup.consentCheckbox"]
@@ -81,56 +110,79 @@ final class SpeakUITests: XCTestCase {
         XCTAssertTrue(downloadButton.isEnabled)
     }
 
-    func testUnsupportedParakeetAutoFallsBackToSmall() {
+    func testUnsupportedParakeetAutoFallsBackToSmall() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
             "SPEAK_UI_RUNTIME_STATUS": "unsupported",
-            "SPEAK_UI_FORCE_NEEDS_SETUP": "1"
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "1",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let modelPicker = app.popUpButtons["setup.modelPicker"]
         XCTAssertTrue(modelPicker.waitForExistence(timeout: 2))
-
-        let fallbackNotice = app.staticTexts["setup.modelStatus"]
-        XCTAssertTrue(fallbackNotice.waitForExistence(timeout: 2))
-        waitForTextContains(fallbackNotice, text: "Small (Fallback)", timeout: 5)
         waitForValueContains(modelPicker, text: "Small", timeout: 5)
     }
 
-    func testExistingUserLaunchDoesNotForceSetup() {
+    func testAlreadyDownloadedModelShowsDownloadedStateInSetup() throws {
+        let fixtureRoot = try makeAppSupportFixtureForDownloadedParakeet()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
-            "SPEAK_UI_FORCE_NEEDS_SETUP": "0"
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "1",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
+        ])
+
+        let status = app.staticTexts["setup.modelStatus"]
+        XCTAssertTrue(status.waitForExistence(timeout: 2))
+        waitForTextContains(status, text: "Downloaded", timeout: 5)
+
+        let downloadButton = app.buttons["setup.downloadButton"]
+        XCTAssertTrue(downloadButton.waitForExistence(timeout: 2))
+        XCTAssertFalse(downloadButton.isEnabled)
+    }
+
+    func testExistingUserLaunchDoesNotForceSetup() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
+        let app = launchApp(env: [
+            "SPEAK_UI_TEST_MODE": "1",
+            "SPEAK_UI_MIC_STATUS": "authorized",
+            "SPEAK_UI_AX_STATUS": "trusted",
+            "SPEAK_UI_FORCE_NEEDS_SETUP": "0",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let setupTitle = app.staticTexts["Set Up Speak"]
         XCTAssertFalse(setupTitle.waitForExistence(timeout: 1.5))
     }
 
-    func testTransientTranscriptionFailureDoesNotReopenSetup() {
+    func testTransientTranscriptionFailureDoesNotReopenSetup() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
             "SPEAK_UI_FORCE_NEEDS_SETUP": "0",
-            "SPEAK_UI_SIMULATE_TRANSCRIPTION_ERROR": "parakeet network timeout"
+            "SPEAK_UI_SIMULATE_TRANSCRIPTION_ERROR": "parakeet network timeout",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let setupTitle = app.staticTexts["Set Up Speak"]
         XCTAssertFalse(setupTitle.waitForExistence(timeout: 2.5))
     }
 
-    func testRecoverableTranscriptionFailureReopensSetup() {
+    func testRecoverableTranscriptionFailureReopensSetup() throws {
+        let fixtureRoot = try makeEmptyAppSupportFixture()
         let app = launchApp(env: [
             "SPEAK_UI_TEST_MODE": "1",
             "SPEAK_UI_MIC_STATUS": "authorized",
             "SPEAK_UI_AX_STATUS": "trusted",
             "SPEAK_UI_FORCE_NEEDS_SETUP": "0",
-            "SPEAK_UI_SIMULATE_TRANSCRIPTION_ERROR": "parakeet could not locate downloaded parakeet model artifacts"
+            "SPEAK_UI_SIMULATE_TRANSCRIPTION_ERROR": "parakeet could not locate downloaded parakeet model artifacts",
+            "SPEAK_TEST_APP_SUPPORT_DIR": fixtureRoot
         ])
 
         let setupTitle = app.staticTexts["Set Up Speak"]

@@ -62,4 +62,31 @@ final class SetupWizardModelSelectionTests: XCTestCase {
         XCTAssertEqual(controller.testSelectedModelID, ModelCatalog.smallEN.id)
         XCTAssertTrue(controller.testModelStatusText.contains("Small (Fallback)"))
     }
+
+    func testActiveDownloadedModelShowsDownloadedState() {
+        let permissions = StubPermissionCoordinator(micStatus: .authorized, axTrusted: true)
+        let manager = StubModelManager(
+            activeModelID: ModelCatalog.parakeetTdtV3.id,
+            activeModelLocalPath: "/tmp/parakeet_tdt_0_6b_v3",
+            needsSetup: false
+        )
+        manager.manifest.lastKnownModelSizes[ModelCatalog.parakeetTdtV3.id] = 478_500_000
+
+        let controller = SetupWizardWindowController(permissionCoordinator: permissions, modelManager: manager)
+        controller.refreshState()
+        pumpRunLoop(seconds: 0.2)
+        controller.testSetConsent(agreed: true)
+
+        XCTAssertEqual(controller.testModelStatusText, "Downloaded")
+        XCTAssertEqual(controller.testDownloadButtonTitle, "Downloaded")
+        XCTAssertFalse(controller.testDownloadButtonEnabled)
+    }
+
+    func testModelDescriptionUsesWordWrapping() {
+        let permissions = StubPermissionCoordinator(micStatus: .authorized, axTrusted: true)
+        let manager = StubModelManager(activeModelID: nil)
+
+        let controller = SetupWizardWindowController(permissionCoordinator: permissions, modelManager: manager)
+        XCTAssertEqual(controller.testModelDescriptionLineBreakMode, .byWordWrapping)
+    }
 }
