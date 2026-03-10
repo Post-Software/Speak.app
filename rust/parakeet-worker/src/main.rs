@@ -15,7 +15,10 @@ const PARAKEET_DISPLAY_NAME: &str = "Parakeet v3 (Default)";
 const PARAKEET_SOURCE_REPO: &str = "nemo-parakeet-tdt-0.6b-v3";
 const PARAKEET_LAYOUT_VERSION: &str = "handy-v1";
 const PARAKEET_FALLBACK_BYTES: i64 = 478_517_071;
-const DEFAULT_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
+const DEFAULT_MODEL_URL: &str =
+    "https://github.com/Post-Software/Speak.app/releases/download/model-parakeet-v3/parakeet-v3-int8.tar.gz";
+const DEFAULT_MODEL_HASH: &str =
+    "43d37191602727524a7d8c6da0eef11c4ba24320f5b4730f1a2497befc2efa77";
 
 #[derive(Debug, Clone)]
 struct Cli {
@@ -233,6 +236,10 @@ fn handle_download_model(cli: &Cli) -> Result<(), String> {
                 source_url.as_str(),
             ],
         )?;
+
+        if let Some(expected_hash) = model_artifact_hash() {
+            verify_download_hash(&archive_path, &expected_hash)?;
+        }
 
         run_command(
             "/usr/bin/tar",
@@ -486,6 +493,40 @@ fn model_artifact_hash() -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+        .or_else(|| Some(DEFAULT_MODEL_HASH.to_string()))
+}
+
+fn verify_download_hash(archive_path: &Path, expected_hash: &str) -> Result<(), String> {
+    let output = Command::new("/usr/bin/shasum")
+        .args(["-a", "256", archive_path.to_string_lossy().as_ref()])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|err| format!("Failed to verify Parakeet model download: {}", sanitize_error(err)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let summary = if !stderr.is_empty() { stderr } else { stdout };
+        return Err(format!(
+            "Failed to verify Parakeet model download: {}",
+            compact_message(&summary, 320)
+        ));
+    }
+
+    let actual_hash = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let expected_hash = expected_hash.trim().to_ascii_lowercase();
+
+    if actual_hash != expected_hash {
+        return Err("Downloaded Parakeet model hash mismatch.".to_string());
+    }
+
+    Ok(())
 }
 
 fn probe_remote_size_with_curl(url: &str) -> Option<i64> {
