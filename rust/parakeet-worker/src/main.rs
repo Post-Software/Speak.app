@@ -17,6 +17,7 @@ const PARAKEET_LAYOUT_VERSION: &str = "handy-v1";
 const PARAKEET_FALLBACK_BYTES: i64 = 478_517_071;
 const DEFAULT_MODEL_URL: &str =
     "https://github.com/Post-Software/Speak.app/releases/download/model-parakeet-v3/parakeet-v3-int8.tar.gz";
+const LEGACY_FALLBACK_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
 const DEFAULT_MODEL_HASH: &str =
     "43d37191602727524a7d8c6da0eef11c4ba24320f5b4730f1a2497befc2efa77";
 
@@ -210,7 +211,7 @@ fn handle_download_model(cli: &Cli) -> Result<(), String> {
         return Err(runtime.reason);
     }
 
-    let source_url = model_source_url();
+    let source_urls = model_source_urls();
     let staging_dir = dest.join(format!(".staging-{model_id}-{}", unique_suffix()));
     let archive_path = staging_dir.join("parakeet-v3-int8.tar.gz");
     let target_dir = dest.join(&model_id);
@@ -221,21 +222,7 @@ fn handle_download_model(cli: &Cli) -> Result<(), String> {
     fs::create_dir_all(&staging_dir).map_err(|err| sanitize_error(err))?;
 
     let result = (|| {
-        run_command(
-            "/usr/bin/curl",
-            &[
-                "-fL",
-                "--retry",
-                "2",
-                "--retry-delay",
-                "1",
-                "--connect-timeout",
-                "30",
-                "-o",
-                archive_path.to_string_lossy().as_ref(),
-                source_url.as_str(),
-            ],
-        )?;
+        let source_url = download_model_archive(&archive_path, &source_urls)?;
 
         if let Some(expected_hash) = model_artifact_hash() {
             verify_download_hash(&archive_path, &expected_hash)?;
@@ -269,13 +256,16 @@ fn handle_download_model(cli: &Cli) -> Result<(), String> {
             let _ = fs::remove_dir_all(&staging_dir);
         }
 
-        Ok::<(), String>(())
+        Ok::<String, String>(source_url)
     })();
 
-    if let Err(err) = result {
-        let _ = fs::remove_dir_all(&staging_dir);
-        return Err(format!("Failed to download Parakeet model. {err}"));
-    }
+    let source_url = match result {
+        Ok(source_url) => source_url,
+        Err(err) => {
+            let _ = fs::remove_dir_all(&staging_dir);
+            return Err(format!("Failed to download Parakeet model. {err}"));
+        }
+    };
 
     let response = json!({
         "ok": true,
@@ -488,12 +478,51 @@ fn model_source_url() -> String {
     env::var("SPEAK_PARAKEET_MODEL_URL").unwrap_or_else(|_| DEFAULT_MODEL_URL.to_string())
 }
 
+fn model_source_urls() -> Vec<String> {
+    model_source_candidates(&model_source_url())
+}
+
+fn model_source_candidates(primary_url: &str) -> Vec<String> {
+    let mut source_urls = vec![primary_url.to_string()];
+    if primary_url == DEFAULT_MODEL_URL {
+        source_urls.push(LEGACY_FALLBACK_MODEL_URL.to_string());
+    }
+    source_urls
+}
+
 fn model_artifact_hash() -> Option<String> {
     env::var("SPEAK_PARAKEET_MODEL_HASH")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .or_else(|| Some(DEFAULT_MODEL_HASH.to_string()))
+}
+
+fn download_model_archive(archive_path: &Path, source_urls: &[String]) -> Result<String, String> {
+    let mut last_error = None;
+
+    for source_url in source_urls {
+        match run_command(
+            "/usr/bin/curl",
+            &[
+                "-fL",
+                "--retry",
+                "2",
+                "--retry-delay",
+                "1",
+                "--connect-timeout",
+                "30",
+                "-o",
+                archive_path.to_string_lossy().as_ref(),
+                source_url.as_str(),
+            ],
+        ) {
+            Ok(()) => return Ok(source_url.clone()),
+            Err(err) => last_error = Some(err),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "Failed to download Parakeet model archive.".to_string()))
 }
 
 fn verify_download_hash(archive_path: &Path, expected_hash: &str) -> Result<(), String> {
@@ -736,4 +765,28 @@ fn compact_message(message: &str, max_chars: usize) -> String {
 
 fn sanitize_error<E: std::fmt::Display>(err: E) -> String {
     compact_message(&err.to_string(), 320)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_source_candidates_include_legacy_fallback_for_default_url() {
+        assert_eq!(
+            model_source_candidates(DEFAULT_MODEL_URL),
+            vec![
+                DEFAULT_MODEL_URL.to_string(),
+                LEGACY_FALLBACK_MODEL_URL.to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn model_source_candidates_do_not_add_fallback_for_custom_url() {
+        assert_eq!(
+            model_source_candidates("https://example.com/custom-parakeet.tar.gz"),
+            vec!["https://example.com/custom-parakeet.tar.gz".to_string()]
+        );
+    }
 }

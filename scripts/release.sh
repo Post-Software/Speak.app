@@ -39,8 +39,8 @@ if [[ -f "${RELEASE_ENV_PATH}" ]]; then
   set +a
 fi
 
-VERSION="${VERSION:-0.2.1}"
-BUILD_NUMBER="${BUILD_NUMBER:-5}"
+VERSION="${VERSION:-0.2.2}"
+BUILD_NUMBER="${BUILD_NUMBER:-6}"
 SPARKLE_SKIP="${SPARKLE_SKIP:-0}"
 SPARKLE_SIGN_UPDATE_BIN="${SPARKLE_SIGN_UPDATE_BIN:-$(command -v sign_update || true)}"
 SPARKLE_RELEASE_BASE_URL="${SPARKLE_RELEASE_BASE_URL:-https://github.com/Post-Software/Speak.app/releases/download/v${VERSION}}"
@@ -69,13 +69,9 @@ fi
 OUT_DIR="${ROOT_DIR}/dist/${VERSION}"
 ARCHIVE_PATH="${OUT_DIR}/${APP_NAME}.xcarchive"
 EXPORT_DIR="${OUT_DIR}/export"
-DMG_STAGING_DIR="${OUT_DIR}/dmg-staging"
-DMG_ASSETS_DIR="${OUT_DIR}/dmg-assets"
 DMG_PATH="${OUT_DIR}/${APP_NAME}-${VERSION}.dmg"
 EXPORT_OPTIONS_PATH="${OUT_DIR}/ExportOptions.plist"
-APPDMG_SPEC_PATH="${OUT_DIR}/appdmg.json"
 APPDMG_LOG="${OUT_DIR}/appdmg.log"
-BG_IMG="${DMG_ASSETS_DIR}/background.png"
 ZIP_PATH="${OUT_DIR}/${APP_NAME}-${VERSION}.zip"
 SPARKLE_SIGNATURE_PATH="${OUT_DIR}/sparkle-signature.txt"
 APPCAST_PATH="${OUT_DIR}/appcast.xml"
@@ -83,11 +79,25 @@ DOCS_APPCAST_PATH="${ROOT_DIR}/docs/appcast.xml"
 
 TMP_DMG_DIR="$(mktemp -d /tmp/speak-dmg.XXXXXX)"
 DMG_TMP_PATH="${TMP_DMG_DIR}/${APP_NAME}-${VERSION}.dmg"
+DMG_STAGING_DIR="${TMP_DMG_DIR}/dmg-staging"
+DMG_ASSETS_DIR="${TMP_DMG_DIR}/dmg-assets"
+APPDMG_SPEC_PATH="${TMP_DMG_DIR}/appdmg.json"
+BG_IMG="${DMG_ASSETS_DIR}/background.png"
 
 cleanup() {
   rm -rf "${TMP_DMG_DIR}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+
+build_plain_dmg() {
+  local plain_root="${TMP_DMG_DIR}/plain-dmg"
+  hdiutil detach "/Volumes/${DMG_VOLNAME}" -force >/dev/null 2>&1 || true
+  rm -rf "${plain_root}"
+  mkdir -p "${plain_root}"
+  ditto "${APP_PATH}" "${plain_root}/${APP_NAME}.app"
+  ln -s /Applications "${plain_root}/Applications"
+  hdiutil create -volname "${DMG_VOLNAME}" -srcfolder "${plain_root}" -ov -format UDZO "${DMG_TMP_PATH}"
+}
 
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}" "${EXPORT_DIR}" "${DMG_STAGING_DIR}" "${DMG_ASSETS_DIR}"
@@ -463,7 +473,8 @@ echo "Building DMG with node-appdmg..."
 if ! npx --no-install appdmg "${APPDMG_SPEC_PATH}" "${DMG_TMP_PATH}" > "${APPDMG_LOG}" 2>&1; then
   echo "appdmg failed. See log: ${APPDMG_LOG}"
   cat "${APPDMG_LOG}" || true
-  exit 1
+  echo "Falling back to plain DMG layout via hdiutil..."
+  build_plain_dmg
 fi
 
 if [[ ! -f "${DMG_TMP_PATH}" ]]; then
